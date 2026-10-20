@@ -1,0 +1,174 @@
+{
+  "nodes": [
+    {
+      "id": "entry",
+      "text": "scripts/setup.sh is the single setup command: it takes a machine with nothing installed to passing checks, and is safe to re-run.",
+      "code": [
+        { "path": "scripts/setup.sh", "side": "RIGHT", "start_line": 1, "line": 12 },
+        { "path": "README.md", "side": "RIGHT", "start_line": 2, "line": 8 }
+      ]
+    },
+    {
+      "id": "ci-same",
+      "text": "CI runs exactly scripts/setup.sh on fresh macOS and Linux runners; there is no CI-only setup.",
+      "code": [{ "path": ".github/workflows/ci.yml", "side": "RIGHT", "start_line": 1, "line": 21 }]
+    },
+    {
+      "id": "ci-token",
+      "text": "CI passes GITHUB_TOKEN so mise's downloads from GitHub are not rate-limited.",
+      "code": [{ "path": ".github/workflows/ci.yml", "side": "RIGHT", "start_line": 15, "line": 17 }]
+    },
+    {
+      "id": "output",
+      "text": "say prints a bold step line and die prints a red error and exits 1, so every failure stops setup with a reason.",
+      "code": [{ "path": "scripts/setup.sh", "side": "RIGHT", "start_line": 29, "line": 31 }]
+    },
+    {
+      "id": "git-clt",
+      "text": "On a Mac without the Command Line Tools, git is installed by softwareupdate under sudo; a marker file in /tmp makes softwareupdate offer the tools, and the newest label is picked.",
+      "code": [{ "path": "scripts/setup.sh", "side": "RIGHT", "start_line": 46, "line": 57 }]
+    },
+    {
+      "id": "git-stub",
+      "text": "The check is xcode-select -p rather than running git, because /usr/bin/git exists on every Mac as a stub that opens Apple's installer dialog.",
+      "code": [{ "path": "scripts/setup.sh", "side": "RIGHT", "start_line": 43, "line": 46 }]
+    },
+    {
+      "id": "git-required",
+      "text": "After that step git must actually run; on Linux it is expected to come from the system package manager.",
+      "code": [{ "path": "scripts/setup.sh", "side": "RIGHT", "start_line": 58, "line": 60 }]
+    },
+    {
+      "id": "mise-pinned",
+      "text": "mise is pinned to MISE_VERSION and downloaded from that GitHub release into ~/.local/bin, only when the installed version is not exactly that one.",
+      "code": [
+        { "path": "scripts/setup.sh", "side": "RIGHT", "line": 13 },
+        { "path": "scripts/setup.sh", "side": "RIGHT", "start_line": 25, "line": 26 },
+        { "path": "scripts/setup.sh", "side": "RIGHT", "start_line": 61, "line": 75 }
+      ]
+    },
+    {
+      "id": "mise-hash",
+      "text": "Each platform's mise tarball is pinned by SHA-256 in the script itself, so the download is trusted only if it is byte-for-byte the file the repo expects; a mismatch stops setup.",
+      "code": [
+        { "path": "scripts/setup.sh", "side": "RIGHT", "start_line": 14, "line": 23 },
+        { "path": "scripts/setup.sh", "side": "RIGHT", "start_line": 68, "line": 69 }
+      ]
+    },
+    {
+      "id": "platform",
+      "text": "OS and CPU are mapped to mise's release asset names (macos/linux, arm64/x64); anything else stops setup.",
+      "code": [
+        { "path": "scripts/setup.sh", "side": "RIGHT", "start_line": 32, "line": 42 },
+        { "path": "scripts/setup.sh", "side": "RIGHT", "line": 66 }
+      ]
+    },
+    {
+      "id": "declared",
+      "text": "Tool versions (node, gh) are declared in mise.toml, and mise install installs exactly those, from the repo root, after the file is marked trusted.",
+      "code": [
+        { "path": "mise.toml", "side": "RIGHT", "start_line": 1, "line": 4 },
+        { "path": "scripts/setup.sh", "side": "RIGHT", "line": 24 },
+        { "path": "scripts/setup.sh", "side": "RIGHT", "start_line": 76, "line": 80 }
+      ]
+    },
+    {
+      "id": "npm-locked",
+      "text": "npm packages install exactly as the lockfile says, through npm ci in the mise task `install`.",
+      "code": [
+        { "path": "mise.toml", "side": "RIGHT", "start_line": 5, "line": 8 },
+        { "path": "scripts/setup.sh", "side": "RIGHT", "start_line": 81, "line": 83 },
+        { "path": "package.json", "side": "RIGHT", "start_line": 1, "line": 12 }
+      ]
+    },
+    {
+      "id": "ignored",
+      "text": "Installed packages (node_modules/) are never committed.",
+      "code": [{ "path": ".gitignore", "side": "RIGHT", "line": 1 }]
+    },
+    {
+      "id": "scratch",
+      "text": "scratch/ is a temporary local working folder that is never committed. It is a working convention, not part of the product.",
+      "code": [{ "path": ".gitignore", "side": "RIGHT", "line": 2 }]
+    },
+    {
+      "id": "interactive",
+      "text": "INTERACTIVE is set only when stdin is a terminal and CI is unset; it gates every step that would edit your shell config or wait for you.",
+      "code": [
+        { "path": "scripts/setup.sh", "side": "RIGHT", "start_line": 27, "line": 28 },
+        { "path": "scripts/setup.sh", "side": "RIGHT", "line": 90 },
+        { "path": "scripts/setup.sh", "side": "RIGHT", "line": 98 }
+      ]
+    },
+    {
+      "id": "activation",
+      "text": "In an interactive zsh or bash, a `mise activate` line is appended to ~/.zshrc or ~/.bashrc once, so node, gh and mise are on PATH in new terminals.",
+      "code": [{ "path": "scripts/setup.sh", "side": "RIGHT", "start_line": 84, "line": 94 }]
+    },
+    {
+      "id": "gh-login",
+      "text": "gh logs in through the browser only when it is not logged in and the run is interactive; otherwise setup carries on, because building and testing never need GitHub.",
+      "code": [{ "path": "scripts/setup.sh", "side": "RIGHT", "start_line": 95, "line": 105 }]
+    },
+    {
+      "id": "check",
+      "text": "Setup ends with `mise run check`, which runs typecheck and tests; a failure there fails setup.",
+      "code": [
+        { "path": "scripts/setup.sh", "side": "RIGHT", "start_line": 106, "line": 109 },
+        { "path": "mise.toml", "side": "RIGHT", "start_line": 9, "line": 19 },
+        { "path": "README.md", "side": "RIGHT", "start_line": 9, "line": 15 }
+      ]
+    },
+    {
+      "id": "smoke",
+      "text": "The only test is a smoke test proving the TypeScript toolchain runs; tsconfig is strict and checks src and test without emitting.",
+      "code": [
+        { "path": "test/smoke.test.ts", "side": "RIGHT", "start_line": 1, "line": 6 },
+        { "path": "src/index.ts", "side": "RIGHT", "line": 1 },
+        { "path": "tsconfig.json", "side": "RIGHT", "start_line": 1, "line": 12 }
+      ]
+    },
+    {
+      "id": "graph-type",
+      "text": "src/graph.ts defines an understanding graph of the code a PR touches, as it stands at the PR's head: a list of nodes and a list of edges, where node order is reading order.",
+      "code": [{ "path": "src/graph.ts", "side": "RIGHT", "start_line": 1, "line": 7 }]
+    },
+    {
+      "id": "graph-node",
+      "text": "A node is an id unique within its graph, text saying what is true about some code (as long as it needs to be), and the locations of that code.",
+      "code": [{ "path": "src/graph.ts", "side": "RIGHT", "start_line": 8, "line": 15 }]
+    },
+    {
+      "id": "graph-edge",
+      "text": "An edge says `to` helps explain `from`, with an optional free-text note; there are no edge types.",
+      "code": [{ "path": "src/graph.ts", "side": "RIGHT", "start_line": 16, "line": 22 }]
+    },
+    {
+      "id": "graph-location",
+      "text": "A location reuses GitHub's PR review-comment fields unchanged: path, side (LEFT = base, so deleted code; RIGHT = head), an optional start_line and the last line.",
+      "code": [{ "path": "src/graph.ts", "side": "RIGHT", "start_line": 23, "line": 32 }]
+    }
+  ],
+  "edges": [
+    { "from": "entry", "to": "ci-same", "note": "where the claim is proved" },
+    { "from": "entry", "to": "output", "note": "how it reports" },
+    { "from": "entry", "to": "git-clt", "note": "step 1" },
+    { "from": "git-clt", "to": "git-stub", "note": "why the check is xcode-select" },
+    { "from": "git-clt", "to": "git-required" },
+    { "from": "entry", "to": "mise-pinned", "note": "step 2" },
+    { "from": "mise-pinned", "to": "mise-hash", "note": "why the download can be trusted" },
+    { "from": "mise-pinned", "to": "platform", "note": "picks which file to download" },
+    { "from": "entry", "to": "declared", "note": "step 3" },
+    { "from": "declared", "to": "npm-locked" },
+    { "from": "npm-locked", "to": "ignored", "note": "what npm installs stays out of git" },
+    { "from": "entry", "to": "interactive", "note": "what may prompt you" },
+    { "from": "interactive", "to": "activation" },
+    { "from": "interactive", "to": "gh-login" },
+    { "from": "entry", "to": "check", "note": "last step" },
+    { "from": "check", "to": "smoke" },
+    { "from": "ci-same", "to": "ci-token" },
+    { "from": "ci-same", "to": "interactive", "note": "CI is not interactive, so nothing prompts" },
+    { "from": "graph-type", "to": "graph-node" },
+    { "from": "graph-type", "to": "graph-edge" },
+    { "from": "graph-node", "to": "graph-location", "note": "where a node points" }  ]
+}
