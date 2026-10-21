@@ -33,4 +33,6 @@ export type Location = {
   start_line?: number;
   /** Last line. */
   line: number;
+  /** git blob hash of lines start_line..line, joined with "\n", no final newline. */
+  hash: string;
 };
