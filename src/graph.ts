@@ -10,7 +10,9 @@ export type Graph = {
 export type Node = {
   /** Unique within this graph. */
   id: string;
-  /** What is true about this code. */
+  /** Short label. */
+  title: string;
+  /** Explanation of what is true about this code; as long as it needs to be. */
   text: string;
   code: Location[];
 };
