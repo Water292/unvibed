@@ -1,5 +1,7 @@
 /** An understanding graph of the code a PR touches, as it stands at the PR's head. */
 export type Graph = {
+  /** Version of src/graph.ts this graph was written against: `git hash-object src/graph.ts`. */
+  schema: string;
   /** Array order is reading order. */
   nodes: Node[];
   edges: Edge[];
