@@ -1,0 +1,19 @@
+[tools]
+node = "24.22.0"
+gh = "2.102.0"
+
+[tasks.install]
+description = "Install npm dependencies exactly as locked"
+run = "npm ci --no-fund --no-audit"
+
+[tasks.typecheck]
+description = "Type-check the project"
+run = "npx tsc --noEmit"
+
+[tasks.test]
+description = "Run the tests"
+run = "npx vitest run"
+
+[tasks.check]
+description = "Everything CI checks"
+depends = ["typecheck", "test"]
