@@ -21,3 +21,7 @@ depends = ["typecheck", "test"]
 [tasks.graph]
 description = "Check a graph against the code it points at"
 run = "node src/cli.ts"
+
+[tasks.view]
+description = "Open the graph viewer on a graph file: mise run view <graph.json>"
+run = "node viewer/view.ts"
