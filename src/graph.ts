@@ -1,5 +1,7 @@
 /** An understanding graph of the code a PR touches, as it stands at the PR's head. */
 export type Graph = {
+  /** Version of src/graph.ts this graph was written against: `git hash-object src/graph.ts`. */
+  schema: string;
   /** Array order is reading order. */
   nodes: Node[];
   edges: Edge[];
@@ -8,7 +10,9 @@ export type Graph = {
 export type Node = {
   /** Unique within this graph. */
   id: string;
-  /** What is true about this code. */
+  /** Short label. */
+  title: string;
+  /** Explanation of what is true about this code; as long as it needs to be. */
   text: string;
   code: Location[];
 };
@@ -29,4 +33,6 @@ export type Location = {
   start_line?: number;
   /** Last line. */
   line: number;
+  /** git blob hash of lines start_line..line, joined with "\n", no final newline. */
+  hash: string;
 };
