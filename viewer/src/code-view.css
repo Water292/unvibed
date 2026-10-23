@@ -1,0 +1,22 @@
+/* react-diff-view's table, fitted to the panel: code doesn't wrap (the box
+   scrolls sideways instead), and the colours follow light and dark mode. */
+.code-view {
+  overflow-x: auto;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 6px;
+  font-size: 12px;
+  --diff-font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.code-view .diff { table-layout: auto; width: max-content; min-width: 100%; }
+.code-view .diff-code { white-space: pre; word-break: normal; padding-right: 8px; }
+.code-view .diff-gutter { cursor: default; opacity: 0.6; }
+
+@media (prefers-color-scheme: dark) {
+  .code-view {
+    --diff-gutter-insert-background-color: rgba(34, 197, 94, 0.25);
+    --diff-code-insert-background-color: rgba(34, 197, 94, 0.15);
+    --diff-gutter-delete-background-color: rgba(239, 68, 68, 0.25);
+    --diff-code-delete-background-color: rgba(239, 68, 68, 0.15);
+    --diff-selection-background-color: rgba(96, 165, 250, 0.35);
+  }
+}
