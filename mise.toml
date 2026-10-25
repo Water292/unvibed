@@ -8,7 +8,7 @@ run = "npm ci --no-fund --no-audit"
 
 [tasks.typecheck]
 description = "Type-check the project"
-run = "npx tsc --noEmit"
+run = ["npx tsc --noEmit", "npx tsc --noEmit -p shared", "npx tsc --noEmit -p viewer"]
 
 [tasks.test]
 description = "Run the tests"
@@ -24,4 +24,4 @@ run = "node src/cli.ts"
 
 [tasks.view]
 description = "Open the graph viewer on a graph file: mise run view <graph.json>"
-run = "node viewer/view.ts"
+run = "node src/view.ts"

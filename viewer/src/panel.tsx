@@ -1,7 +1,7 @@
 // The side panel for the selected node: its explanation, the nodes it links
 // to and from, and the code it points at.
 import type { HunkData } from "react-diff-view";
-import type { Graph, Node } from "../../src/graph.ts";
+import type { Graph, Node } from "../../shared/graph.ts";
 import { CodeView } from "./code-view.tsx";
 
 const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";

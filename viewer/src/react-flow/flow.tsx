@@ -3,7 +3,7 @@
 import { Background, MarkerType, Position, ReactFlow, type Edge, type Node, type ReactFlowInstance } from "@xyflow/react";
 import { useEffect, useMemo, useState } from "react";
 import "@xyflow/react/dist/style.css";
-import type { Graph } from "../../../src/graph.ts";
+import type { Graph } from "../../../shared/graph.ts";
 import { layout } from "../layout.ts";
 
 const COLUMN_WIDTH = 340;

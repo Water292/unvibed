@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { expect, test } from "vitest";
 import { check, hashLines, type ReadFile } from "../src/check.ts";
-import type { Graph } from "../src/graph.ts";
+import type { Graph } from "../shared/graph.ts";
 
 // One node explaining lines 2–3 ("two", "three") of a file.
 const graph: Graph = {

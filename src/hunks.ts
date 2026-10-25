@@ -2,8 +2,9 @@
 // for the viewer's side panel. Runs in Node (view.ts); the page only gets
 // these hunks, never whole files.
 import { computeNewLineNumber, computeOldLineNumber, parseDiff, type ChangeData, type HunkData } from "react-diff-view";
-import { git, show } from "../src/git.ts";
-import type { Graph, Location } from "../src/graph.ts";
+import { git, show } from "./git.ts";
+import type { GraphAndCode } from "../shared/graph-and-code.ts";
+import type { Graph, Location } from "../shared/graph.ts";
 
 /**
  * Every line of a file between base and head (undefined = the working tree),
@@ -56,9 +57,6 @@ export function hunkIn(changes: ChangeData[], side: Location["side"], start: num
     changes: picked,
   };
 }
-
-/** What the page loads: the graph, and each node's code as one hunk per location, in order, by node id. */
-export type GraphAndCode = { graph: Graph; perNodeHunks: Record<string, HunkData[]> };
 
 /** Every node's hunks. A hunk with no changes means the file can't be read on the location's side. Each file's changes are worked out once per side. */
 export function codeFor(graph: Graph, base: string, head: string | undefined): GraphAndCode {

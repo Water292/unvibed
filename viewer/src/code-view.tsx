@@ -4,7 +4,7 @@
 import { Diff, Hunk, type HunkData } from "react-diff-view";
 import "react-diff-view/style/index.css";
 import "./code-view.css";
-import type { Location } from "../../src/graph.ts";
+import type { Location } from "../../shared/graph.ts";
 
 const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
 
