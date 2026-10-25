@@ -3,6 +3,7 @@
   "compilerOptions": {
     "lib": ["es2024", "dom", "dom.iterable"],
     "types": [],
+    "erasableSyntaxOnly": false,
     "jsx": "react-jsx"
   },
   "include": ["src", "test"]

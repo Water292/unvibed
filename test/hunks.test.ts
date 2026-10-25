@@ -27,3 +27,28 @@ test("the hunk starts at the range's first line on each side and counts each sid
   const h = hunkIn(changes, "RIGHT", 2, 4);
   expect([h.oldStart, h.oldLines, h.newStart, h.newLines]).toEqual([2, 2, 2, 3]);
 });
+
+// two lines replaced by three, zipped for a split view: -x +X -y +Y +Z
+const zipped = parseDiff(
+  `diff --git a/g b/g
+--- a/g
++++ b/g
+@@ -1,3 +1,4 @@
+ a
+-x
+-y
++X
++Y
++Z`,
+  { nearbySequences: "zip" },
+)[0]!.hunks.flatMap((h) => h.changes);
+const zippedTexts = (side: "LEFT" | "RIGHT", start: number, end: number) =>
+  hunkIn(zipped, side, start, end).changes.map((c) => c.content);
+
+test("zipped, a head range keeps each added line's partner", () => {
+  expect(zippedTexts("RIGHT", 2, 4)).toEqual(["x", "X", "y", "Y", "Z"]);
+});
+
+test("zipped, a head range starting mid-block starts with that line's partner", () => {
+  expect(zippedTexts("RIGHT", 3, 3)).toEqual(["y", "Y"]);
+});

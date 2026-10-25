@@ -2,7 +2,7 @@
 //
 //   node src/cli.ts check <graph.json> [--base <rev>] [--head <rev>]
 //
-// LEFT locations are read at --base (default: merge-base of main and HEAD),
+// LEFT locations are read at --base (default: merge-base of origin/main and HEAD),
 // RIGHT locations at --head (default: the working tree).
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";

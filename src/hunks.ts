@@ -10,14 +10,16 @@ import type { Graph, Location } from "../shared/graph.ts";
  * Every line of a file between base and head (undefined = the working tree),
  * as changes; undefined if the file can't be read on the given side. git
  * diffs the whole file, so nothing is left out. When git shows no
- * difference, the file is either unchanged or new and not yet tracked.
+ * difference, the file is either unchanged or new and not yet tracked. zip
+ * pairs removed lines with the added lines replacing them, first with first,
+ * for a split view; git's order (all removed, then all added) suits unified.
  */
-function fileChanges(path: string, side: Location["side"], base: string, head: string | undefined): ChangeData[] | undefined {
+function fileChanges(path: string, side: Location["side"], base: string, head: string | undefined, zip: boolean): ChangeData[] | undefined {
   const before = show(base, path);
   const mine = side === "LEFT" ? before : show(head, path);
   if (mine === undefined) return undefined;
   const diff = git("diff", "--unified=100000", base, ...(head ? [head] : []), "--", path);
-  if (diff) return parseDiff(diff)[0]?.hunks.flatMap((h) => h.changes) ?? [];
+  if (diff) return parseDiff(diff, zip ? { nearbySequences: "zip" } : {})[0]?.hunks.flatMap((h) => h.changes) ?? [];
   const lines = mine.replace(/\n$/, "").split("\n");
   if (before === undefined)
     return lines.map((content, i): ChangeData => ({ type: "insert", isInsert: true, lineNumber: i + 1, content }));
@@ -58,12 +60,12 @@ export function hunkIn(changes: ChangeData[], side: Location["side"], start: num
   };
 }
 
-/** Every node's hunks. A hunk with no changes means the file can't be read on the location's side. Each file's changes are worked out once per side. */
-export function codeFor(graph: Graph, base: string, head: string | undefined): GraphAndCode {
+/** Every node's hunks, zipped for a split view if asked. A hunk with no changes means the file can't be read on the location's side. Each file's changes are worked out once per side. */
+export function codeFor(graph: Graph, base: string, head: string | undefined, zip: boolean): GraphAndCode {
   const files = new Map<string, ChangeData[] | undefined>();
   const hunk = (loc: Location) => {
     const key = `${loc.side}:${loc.path}`;
-    if (!files.has(key)) files.set(key, fileChanges(loc.path, loc.side, base, head));
+    if (!files.has(key)) files.set(key, fileChanges(loc.path, loc.side, base, head, zip));
     return hunkIn(files.get(key) ?? [], loc.side, loc.start_line ?? loc.line, loc.line);
   };
   return { graph, perNodeHunks: Object.fromEntries(graph.nodes.map((n) => [n.id, n.code.map(hunk)])) };
