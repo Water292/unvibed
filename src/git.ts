@@ -14,5 +14,5 @@ export function show(rev: string | undefined, path: string): string | undefined 
   }
 }
 
-/** Where a PR's changes start: the merge-base of main and HEAD. */
-export const defaultBase = () => git("merge-base", "main", "HEAD").trim();
+/** Where a PR's changes start: the merge-base of origin/main and HEAD. */
+export const defaultBase = () => git("merge-base", "origin/main", "HEAD").trim();

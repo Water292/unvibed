@@ -3,16 +3,26 @@
 import type { HunkData } from "react-diff-view";
 import type { Graph, Node } from "../../shared/graph.ts";
 import { CodeView } from "./code-view.tsx";
+import { ViewType } from "./view-type.ts";
 
 const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
 
-/** The panel floats over the right of the canvas, this many pixels wide. */
-export const panelWidth = () => Math.min(560, Math.round(window.innerWidth * 0.45));
+/** The panel floats over the right of the canvas, this many pixels wide; wider for a split diff, which shows base and head side by side. */
+export const panelWidth = (viewType: ViewType) =>
+  viewType === ViewType.Split ? Math.min(1000, Math.round(window.innerWidth * 0.65)) : Math.min(560, Math.round(window.innerWidth * 0.45));
 
-/** hunksForNode: one hunk per location of the node, in order. */
-type Props = { graph: Graph; node: Node; hunksForNode: HunkData[]; onSelect: (id: string | undefined) => void };
+/** hunksForNode: one hunk per location of the node, in order. width: panelWidth's, worked out once by the caller, which also tells the canvas. */
+type Props = {
+  graph: Graph;
+  node: Node;
+  hunksForNode: HunkData[];
+  onSelect: (id: string | undefined) => void;
+  width: number;
+  viewType: ViewType;
+  onViewType: (viewType: ViewType) => void;
+};
 
-export function Panel({ graph, node, hunksForNode, onSelect }: Props) {
+export function Panel({ graph, node, hunksForNode, onSelect, width, viewType, onViewType }: Props) {
   const links = (ids: { id: string; note?: string }[], arrow: string) =>
     ids.map(({ id, note }) => (
       <div key={id} style={{ fontSize: 12, marginTop: 4 }}>
@@ -33,7 +43,7 @@ export function Panel({ graph, node, hunksForNode, onSelect }: Props) {
         top: 0,
         right: 0,
         bottom: 0,
-        width: panelWidth(),
+        width,
         boxSizing: "border-box",
         overflow: "auto",
         borderLeft: "1px solid rgba(128, 128, 128, 0.3)",
@@ -46,15 +56,48 @@ export function Panel({ graph, node, hunksForNode, onSelect }: Props) {
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <div style={{ fontFamily: MONO, fontSize: 12, opacity: 0.6 }}>{node.id}</div>
-        <button onClick={() => onSelect(undefined)} title="Close">✕</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <ViewToggle viewType={viewType} onViewType={onViewType} />
+          <button onClick={() => onSelect(undefined)} title="Close">✕</button>
+        </div>
       </div>
       <h2 style={{ fontSize: 16, margin: "4px 0 8px" }}>{node.title}</h2>
       <p style={{ fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{node.text}</p>
       {links(incoming, "←")}
       {links(outgoing, "→")}
       {node.code.map((location, i) => (
-        <CodeView key={i} location={location} hunk={hunksForNode[i]} />
+        <CodeView key={i} location={location} hunk={hunksForNode[i]} viewType={viewType} />
       ))}
     </aside>
+  );
+}
+
+/** viewType: the view now shown; onViewType: called with the view a click picks. */
+type ViewToggleProps = { viewType: ViewType; onViewType: (viewType: ViewType) => void };
+
+/** One button per ViewType, labelled with its name, in the enum's order; the current one is pressed. */
+function ViewToggle({ viewType, onViewType }: ViewToggleProps) {
+  return (
+    <div role="group" aria-label="Diff view" style={{ display: "flex" }}>
+      {Object.entries(ViewType).map(([label, v], i) => (
+        <button
+          key={v}
+          aria-pressed={viewType === v}
+          onClick={() => onViewType(v)}
+          style={{
+            fontSize: 11,
+            padding: "2px 8px",
+            border: "1px solid rgba(128, 128, 128, 0.5)",
+            borderRadius: i === 0 ? "4px 0 0 4px" : "0 4px 4px 0",
+            marginLeft: i === 0 ? 0 : -1,
+            background: viewType === v ? "rgba(128, 128, 128, 0.3)" : "transparent",
+            color: "inherit",
+            cursor: "pointer",
+          }}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
   );
 }

@@ -11,6 +11,13 @@
 .code-view .diff-code { white-space: pre; word-break: normal; padding-right: 8px; }
 .code-view .diff-gutter { cursor: default; opacity: 0.6; }
 
+/* Split view: base and head each take half the box, and a line longer than
+   its half wraps, breaking at spaces where it can. */
+.code-view .diff-split { table-layout: fixed; width: 100%; }
+.code-view .diff-split .diff-code { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* react-diff-view marks the empty side of a row with a red bar; the shading is enough */
+.code-view .diff-gutter-omit::before { display: none; }
+
 @media (prefers-color-scheme: dark) {
   .code-view {
     --diff-gutter-insert-background-color: rgba(34, 197, 94, 0.25);

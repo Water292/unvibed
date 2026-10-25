@@ -5,7 +5,7 @@
 // Starts Vite's development server (hot reload included) and answers
 // /graph.json with the chosen file, which can be anywhere on disk, together
 // with the code each node points at, diffed between --base (default:
-// merge-base of main and HEAD) and --head (default: the working tree). The
+// merge-base of origin/main and HEAD) and --head (default: the working tree). The
 // page only gets those, so nothing else on disk is exposed.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -35,7 +35,7 @@ const head = args.values.head;
 const serveGraph: Plugin = {
   name: "serve-graph",
   configureServer(server) {
-    server.middlewares.use("/graph.json", (_req, res) => {
+    server.middlewares.use("/graph.json", (req, res) => {
       let graph: Graph;
       try {
         graph = JSON.parse(readFileSync(path, "utf8")); // read fresh on every request
@@ -46,7 +46,8 @@ const serveGraph: Plugin = {
       }
       try {
         res.setHeader("content-type", "application/json");
-        res.end(JSON.stringify(codeFor(graph, base, head)));
+        const zip = new URL(req.url ?? "", "http://localhost").searchParams.get("zip") === "1"; // the page asks for ?zip=1 in split view
+        res.end(JSON.stringify(codeFor(graph, base, head, zip)));
       } catch (e) {
         res.statusCode = 500;
         res.end(`can't read the code: ${(e as Error).message}`);
