@@ -1,6 +1,6 @@
 // Opens the viewer on a graph file:
 //
-//   node viewer/view.ts <graph.json> [--base <rev>] [--head <rev>]
+//   node src/view.ts <graph.json> [--base <rev>] [--head <rev>]
 //
 // Starts Vite's development server (hot reload included) and answers
 // /graph.json with the chosen file, which can be anywhere on disk, together
@@ -11,11 +11,11 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { createServer, type Plugin } from "vite";
-import { defaultBase } from "../src/git.ts";
-import type { Graph } from "../src/graph.ts";
+import { defaultBase } from "./git.ts";
+import type { Graph } from "../shared/graph.ts";
 import { codeFor } from "./hunks.ts";
 
-const usage = "usage: node viewer/view.ts <graph.json> [--base <rev>] [--head <rev>]";
+const usage = "usage: node src/view.ts <graph.json> [--base <rev>] [--head <rev>]";
 let args;
 try {
   args = parseArgs({ allowPositionals: true, options: { base: { type: "string" }, head: { type: "string" } } });

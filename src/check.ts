@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { Graph, Location } from "./graph.ts";
+import type { Graph, Location } from "../shared/graph.ts";
 
 /** Reads a file's contents on one side of the diff; undefined if it doesn't exist there. */
 export type ReadFile = (side: Location["side"], path: string) => string | undefined;

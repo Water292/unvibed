@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { parseDiff } from "react-diff-view";
-import { hunkIn } from "../viewer/hunks.ts";
+import { hunkIn } from "../src/hunks.ts";
 
 // line 2 "b" was replaced by "B", and "d" was added after "c"
 const diff = `diff --git a/f b/f

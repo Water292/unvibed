@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
-import type { Graph } from "../src/graph.ts";
-import { closingLinks, layout } from "../viewer/src/layout.ts";
+import type { Graph } from "../../shared/graph.ts";
+import { closingLinks, layout } from "../src/layout.ts";
 
 const node = (id: string) => ({ id, title: id, text: "", code: [] });
 const graph = (ids: string[], links: [string, string][]): Graph => ({

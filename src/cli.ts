@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { check, type ReadFile } from "./check.ts";
 import { defaultBase, show } from "./git.ts";
-import type { Graph } from "./graph.ts";
+import type { Graph } from "../shared/graph.ts";
 
 const usage = "usage: node src/cli.ts check <graph.json> [--base <rev>] [--head <rev>]";
 

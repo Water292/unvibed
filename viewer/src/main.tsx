@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import type { GraphAndCode } from "../hunks.ts";
+import type { GraphAndCode } from "../../shared/graph-and-code.ts";
 import { Panel, panelWidth } from "./panel.tsx";
 import { Flow } from "./react-flow/flow.tsx";
 

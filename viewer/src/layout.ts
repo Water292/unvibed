@@ -1,4 +1,4 @@
-import type { Graph } from "../../src/graph.ts";
+import type { Graph } from "../../shared/graph.ts";
 
 /** Where a node sits, in grid cells rather than pixels. */
 export type Cell = { column: number; row: number };
