@@ -5,9 +5,8 @@ import { Panel, panelWidth } from "./panel.tsx";
 import { Flow } from "./react-flow/flow.tsx";
 import { isViewType, ViewType } from "./view-type.ts";
 
-/** zip: removed lines paired with the added lines replacing them, for a split view. */
-async function load(zip: boolean): Promise<GraphAndCode> {
-  const res = await fetch(zip ? "/graph.json?zip=1" : "/graph.json");
+async function load(): Promise<GraphAndCode> {
+  const res = await fetch("/graph.json");
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -36,12 +35,12 @@ function App() {
   const changeViewType = (v: ViewType) => (setViewType(v), saveViewType(v));
 
   useEffect(() => {
-    load(viewType === ViewType.Split).then(setData, (e: Error) => setError(e.message));
-  }, [viewType]);
+    load().then(setData, (e: Error) => setError(e.message));
+  }, []);
 
   if (error) return <p style={{ padding: 16, fontFamily: "system-ui" }}>{error}</p>;
   if (!data) return null;
-  const { graph, perNodeHunks } = data;
+  const { graph, perNodeDiffs } = data;
   const node = graph.nodes.find((n) => n.id === selected);
   const width = panelWidth(viewType);
   return (
@@ -51,7 +50,7 @@ function App() {
         <Panel
           graph={graph}
           node={node}
-          hunksForNode={perNodeHunks[node.id] ?? []}
+          diffsForNode={perNodeDiffs[node.id] ?? []}
           onSelect={setSelected}
           width={width}
           viewType={viewType}

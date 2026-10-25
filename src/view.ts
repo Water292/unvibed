@@ -35,7 +35,7 @@ const head = args.values.head;
 const serveGraph: Plugin = {
   name: "serve-graph",
   configureServer(server) {
-    server.middlewares.use("/graph.json", (req, res) => {
+    server.middlewares.use("/graph.json", (_req, res) => {
       let graph: Graph;
       try {
         graph = JSON.parse(readFileSync(path, "utf8")); // read fresh on every request
@@ -46,8 +46,7 @@ const serveGraph: Plugin = {
       }
       try {
         res.setHeader("content-type", "application/json");
-        const zip = new URL(req.url ?? "", "http://localhost").searchParams.get("zip") === "1"; // the page asks for ?zip=1 in split view
-        res.end(JSON.stringify(codeFor(graph, base, head, zip)));
+        res.end(JSON.stringify(codeFor(graph, base, head)));
       } catch (e) {
         res.statusCode = 500;
         res.end(`can't read the code: ${(e as Error).message}`);

@@ -11,6 +11,7 @@
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.2",
     "@xyflow/react": "12.12.0",
+    "gitdiff-parser": "0.3.1",
     "react": "19.3.0",
     "react-diff-view": "3.3.3",
     "react-dom": "19.3.0",
