@@ -1,6 +1,5 @@
 // The side panel for the selected node: its explanation, the nodes it links
 // to and from, and the code it points at.
-import type { HunkData } from "react-diff-view";
 import type { Graph, Node } from "../../shared/graph.ts";
 import { CodeView } from "./code-view.tsx";
 import { ViewType } from "./view-type.ts";
@@ -11,18 +10,18 @@ const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
 export const panelWidth = (viewType: ViewType) =>
   viewType === ViewType.Split ? Math.min(1000, Math.round(window.innerWidth * 0.65)) : Math.min(560, Math.round(window.innerWidth * 0.45));
 
-/** hunksForNode: one hunk per location of the node, in order. width: panelWidth's, worked out once by the caller, which also tells the canvas. */
+/** diffsForNode: one unified diff per location of the node, in order. width: panelWidth's, worked out once by the caller, which also tells the canvas. */
 type Props = {
   graph: Graph;
   node: Node;
-  hunksForNode: HunkData[];
+  diffsForNode: string[];
   onSelect: (id: string | undefined) => void;
   width: number;
   viewType: ViewType;
   onViewType: (viewType: ViewType) => void;
 };
 
-export function Panel({ graph, node, hunksForNode, onSelect, width, viewType, onViewType }: Props) {
+export function Panel({ graph, node, diffsForNode, onSelect, width, viewType, onViewType }: Props) {
   const links = (ids: { id: string; note?: string }[], arrow: string) =>
     ids.map(({ id, note }) => (
       <div key={id} style={{ fontSize: 12, marginTop: 4 }}>
@@ -66,7 +65,7 @@ export function Panel({ graph, node, hunksForNode, onSelect, width, viewType, on
       {links(incoming, "←")}
       {links(outgoing, "→")}
       {node.code.map((location, i) => (
-        <CodeView key={i} location={location} hunk={hunksForNode[i]} viewType={viewType} />
+        <CodeView key={i} location={location} diff={diffsForNode[i]} viewType={viewType} />
       ))}
     </aside>
   );

@@ -59,6 +59,10 @@ export function Flow({ graph, selected, onSelect, covered }: Props) {
     return {
       id: n.id,
       position: { x: cell.column * COLUMN_WIDTH, y: cell.row * ROW_HEIGHT },
+      // These node objects are rebuilt on every render (each hover). React Flow forgets a rebuilt node's measured
+      // size unless it's passed back in: without it the node is hidden and its links dropped until it's measured
+      // again, which under a resting cursor fires mouseleave, unlights it, rebuilds it, ... (a blink).
+      measured: flow?.getInternalNode(n.id)?.measured,
       data: {
         label: (
           <div style={{ textAlign: "left" }}>
