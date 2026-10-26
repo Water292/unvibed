@@ -20,7 +20,7 @@ run = "npx playwright test"
 
 [tasks.check]
 description = "Everything CI checks"
-depends = ["typecheck", "test"]
+depends = ["typecheck", "test", "e2e"]
 
 [tasks.graph]
 description = "Check a graph against the code it points at"
