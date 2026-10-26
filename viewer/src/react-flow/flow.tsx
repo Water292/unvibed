@@ -1,6 +1,6 @@
 // The only file that knows about React Flow: it turns the graph and its
 // layout into React Flow's nodes and edges, in pixels, and draws them.
-import { Background, MarkerType, Position, ReactFlow, type Edge, type Node, type ReactFlowInstance } from "@xyflow/react";
+import { Background, MarkerType, Position, ReactFlow, useNodesState, type Edge, type Node, type ReactFlowInstance } from "@xyflow/react";
 import { useEffect, useMemo, useState } from "react";
 import "@xyflow/react/dist/style.css";
 import type { Graph } from "../../../shared/graph.ts";
@@ -52,17 +52,16 @@ export function Flow({ graph, selected, onSelect, covered }: Props) {
   // drawn quietly so the main left-to-right reading stays clear.
   const isBack = (from: string, to: string) => cells.get(to)!.column <= cells.get(from)!.column;
 
-  const nodes: Node[] = graph.nodes.map((n) => {
+  // The nodes are kept in state, and React Flow's changes to them (each box's measured size, once drawn) are applied
+  // to it, as React Flow expects: a node handed back without its measured size is hidden, and its links dropped,
+  // until React Flow measures it again.
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>(graph.nodes.map((n) => {
     const cell = cells.get(n.id)!;
     // Each link's note is shown in the node it points to, not on the line.
     const incoming = graph.edges.filter((e) => e.to === n.id);
     return {
       id: n.id,
       position: { x: cell.column * COLUMN_WIDTH, y: cell.row * ROW_HEIGHT },
-      // These node objects are rebuilt on every render (each hover). React Flow forgets a rebuilt node's measured
-      // size unless it's passed back in: without it the node is hidden and its links dropped until it's measured
-      // again, which under a resting cursor fires mouseleave, unlights it, rebuilds it, ... (a blink).
-      measured: flow?.getInternalNode(n.id)?.measured,
       data: {
         label: (
           <div style={{ textAlign: "left" }}>
@@ -77,16 +76,21 @@ export function Flow({ graph, selected, onSelect, covered }: Props) {
           </div>
         ),
       },
-      style: {
-        width: NODE_WIDTH,
-        opacity: active && !lit.has(n.id) ? DIM : 1,
-        ...(n.id === selected ? { borderColor: HIGHLIGHT, boxShadow: `0 0 0 1px ${HIGHLIGHT}` } : {}),
-      },
+      style: { width: NODE_WIDTH },
       // columns run left to right, so links leave from the right and arrive on the left
       sourcePosition: Position.Right,
       targetPosition: Position.Left,
     };
-  });
+  }));
+  // Lighting up and fading change each node's style, keeping the rest of it, measured size included.
+  useEffect(() => {
+    const style = (id: string) => ({
+      width: NODE_WIDTH,
+      opacity: active && !lit.has(id) ? DIM : 1,
+      ...(id === selected ? { borderColor: HIGHLIGHT, boxShadow: `0 0 0 1px ${HIGHLIGHT}` } : {}),
+    });
+    setNodes((nodes) => nodes.map((n) => ({ ...n, style: style(n.id) })));
+  }, [active, selected]);
 
   const edges: Edge[] = graph.edges.map((e) => {
     const back = isBack(e.from, e.to);
@@ -114,6 +118,8 @@ export function Flow({ graph, selected, onSelect, covered }: Props) {
       fitView
       minZoom={0.1}
       onInit={setFlow}
+      // only React Flow's measurements: where boxes sit, and which is selected, are this file's
+      onNodesChange={(changes) => onNodesChange(changes.filter((c) => c.type === "dimensions"))}
       onNodeClick={(_, n) => onSelect(n.id)}
       onPaneClick={() => onSelect(undefined)}
       onNodeMouseEnter={(_, n) => setHovered(n.id)}
