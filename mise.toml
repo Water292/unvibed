@@ -3,16 +3,20 @@ node = "24.22.0"
 gh = "2.102.0"
 
 [tasks.install]
-description = "Install npm dependencies exactly as locked"
-run = "npm ci --no-fund --no-audit"
+description = "Install npm dependencies exactly as locked, and the browser the e2e tests drive"
+run = ["npm ci --no-fund --no-audit", "npx playwright install chromium"]
 
 [tasks.typecheck]
 description = "Type-check the project"
-run = ["npx tsc --noEmit", "npx tsc --noEmit -p shared", "npx tsc --noEmit -p viewer"]
+run = ["npx tsc --noEmit", "npx tsc --noEmit -p shared", "npx tsc --noEmit -p viewer", "npx tsc --noEmit -p e2e"]
 
 [tasks.test]
 description = "Run the tests"
 run = "npx vitest run"
+
+[tasks.e2e]
+description = "Run the browser tests: the viewer in Chromium, on a repo each test file builds"
+run = "npx playwright test"
 
 [tasks.check]
 description = "Everything CI checks"
