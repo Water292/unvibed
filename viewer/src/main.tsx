@@ -1,7 +1,7 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { GraphAndCode } from "../../shared/graph-and-code.ts";
-import { Panel, panelWidth } from "./panel.tsx";
+import { clampPanelWidth, initialPanelWidth, Panel } from "./panel.tsx";
 import { Flow } from "./react-flow/flow.tsx";
 import { isViewType, ViewType } from "./view-type.ts";
 
@@ -27,12 +27,41 @@ function saveViewType(viewType: ViewType) {
   } catch {}
 }
 
+// The share of the window's width the panel was last dragged to, kept in this browser; undefined if never dragged,
+// not a share (a number between 0 and 1), or storage is unavailable.
+const PANEL_SHARE_KEY = "unvibed.panelShare";
+function savedPanelShare(): number | undefined {
+  try {
+    const saved = Number(localStorage.getItem(PANEL_SHARE_KEY));
+    return saved > 0 && saved < 1 ? saved : undefined;
+  } catch {
+    return undefined;
+  }
+}
+function savePanelShare(share: number) {
+  try {
+    localStorage.setItem(PANEL_SHARE_KEY, String(share));
+  } catch {}
+}
+
 function App() {
   const [data, setData] = useState<GraphAndCode>();
   const [error, setError] = useState<string>();
   const [selected, setSelected] = useState<string>();
   const [viewType, setViewType] = useState(savedViewType);
   const changeViewType = (v: ViewType) => (setViewType(v), saveViewType(v));
+  // The window's width, kept current as the window is resized, so the panel's width follows it.
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  useEffect(() => {
+    const resized = () => setWindowWidth(window.innerWidth);
+    window.addEventListener("resize", resized);
+    return () => window.removeEventListener("resize", resized);
+  }, []);
+  // The window's width when the page opened, which each view's default share is worked out for.
+  const [openingWidth] = useState(window.innerWidth);
+  // The share of the window's width the panel's edge was dragged to; changeWidth turns a dragged width into one.
+  const [draggedShare, setDraggedShare] = useState(savedPanelShare);
+  const changeWidth = (w: number) => (setDraggedShare(w / windowWidth), savePanelShare(w / windowWidth));
 
   useEffect(() => {
     load().then(setData, (e: Error) => setError(e.message));
@@ -42,7 +71,10 @@ function App() {
   if (!data) return null;
   const { graph, perNodeDiffs, files } = data;
   const node = graph.nodes.find((n) => n.id === selected);
-  const width = panelWidth(viewType);
+  // The panel takes a share of the window, kept as the window is resized: once its edge has been dragged, the
+  // share dragged to, for both views; until then each view's default for the window the page opened in.
+  const share = draggedShare ?? initialPanelWidth(viewType, openingWidth) / openingWidth;
+  const width = clampPanelWidth(Math.round(share * windowWidth), windowWidth);
   return (
     <div style={{ position: "relative", height: "100%" }}>
       <Flow graph={graph} selected={selected} onSelect={setSelected} covered={node ? width : 0} />
@@ -54,6 +86,7 @@ function App() {
           files={files}
           onSelect={setSelected}
           width={width}
+          onWidth={changeWidth}
           viewType={viewType}
           onViewType={changeViewType}
         />
