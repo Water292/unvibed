@@ -40,7 +40,7 @@ function App() {
 
   if (error) return <p style={{ padding: 16, fontFamily: "system-ui" }}>{error}</p>;
   if (!data) return null;
-  const { graph, perNodeDiffs } = data;
+  const { graph, perNodeDiffs, files } = data;
   const node = graph.nodes.find((n) => n.id === selected);
   const width = panelWidth(viewType);
   return (
@@ -51,6 +51,7 @@ function App() {
           graph={graph}
           node={node}
           diffsForNode={perNodeDiffs[node.id] ?? []}
+          files={files}
           onSelect={setSelected}
           width={width}
           viewType={viewType}

@@ -1,9 +1,10 @@
 // The code each node points at, as one small unified diff per location, for
-// the viewer's side panel. Runs in Node (view.ts); the page only gets these
-// diffs, never whole files, in the plain format any diff renderer reads.
+// the viewer's side panel, in the plain format any diff renderer reads, plus
+// the files those locations point into, whole, which the renderer draws lines
+// from. Runs in Node (view.ts).
 import gitdiffModule, { type Change } from "gitdiff-parser";
 import { git, show } from "./git.ts";
-import type { GraphAndCode } from "../shared/graph-and-code.ts";
+import type { FileContents, GraphAndCode } from "../shared/graph-and-code.ts";
 import type { Graph, Location } from "../shared/graph.ts";
 
 /**
@@ -22,22 +23,25 @@ const newLine = (c: Change) => (c.type === "normal" ? c.newLineNumber : c.type =
  * diffs the whole file, so nothing is left out. When git shows no
  * difference, the file is either unchanged or new and not yet tracked.
  */
-function fileChanges(path: string, side: Location["side"], base: string, head: string | undefined): Change[] | undefined {
-  const before = show(base, path);
-  const mine = side === "LEFT" ? before : show(head, path);
+function fileChanges(path: string, side: Location["side"], base: string, head: string | undefined, file: FileContents): Change[] | undefined {
+  const mine = side === "LEFT" ? file.old : file.new;
   if (mine === undefined) return undefined;
   const diff = git("diff", "--unified=100000", base, ...(head ? [head] : []), "--", path);
   if (diff) return gitdiff.parse(diff)[0]?.hunks.flatMap((h) => h.changes) ?? [];
   const lines = mine.replace(/\n$/, "").split("\n");
-  if (before === undefined)
+  if (file.old === undefined)
     return lines.map((content, i): Change => ({ type: "insert", isInsert: true, lineNumber: i + 1, content }));
   return lines.map((content, i): Change => ({ type: "normal", isNormal: true, oldLineNumber: i + 1, newLineNumber: i + 1, content }));
 }
 
+/** Unchanged lines kept around a location's lines, as git keeps around a change. */
+export const CONTEXT = 3;
+
 /**
- * The changes in a location's line range, counted on its side. Lines only on
- * the other side are kept where they sit next to lines in range, so a head
- * range shows what it replaced and a base range shows what replaced it.
+ * The changes in a location's line range, counted on its side, with up to
+ * CONTEXT unchanged lines before and after. Lines only on the other side are
+ * kept where they sit next to lines in range, so a head range shows what it
+ * replaced and a base range shows what replaced it.
  */
 export function hunkIn(changes: Change[], side: Location["side"], start: number, end: number): Change[] {
   // a change's line number on the location's side; -1 if the line isn't on that side
@@ -46,14 +50,15 @@ export function hunkIn(changes: Change[], side: Location["side"], start: number,
   if (first < 0) first = changes.length;
   // a diff lists what was replaced just before its replacement
   while (first > 0 && line(changes[first - 1]!) < 0) first--;
-  const picked: Change[] = [];
-  for (const c of changes.slice(first)) {
-    if (line(c) > end) break;
-    picked.push(c);
-  }
+  let last = first - 1;
+  while (last + 1 < changes.length && line(changes[last + 1]!) <= end) last++;
   // drop other-side lines trailing after the last line in range
-  while (picked.length && line(picked.at(-1)!) < 0) picked.pop();
-  return picked;
+  while (last >= first && line(changes[last]!) < 0) last--;
+  if (last < first) return [];
+  // unchanged lines around them; a renderer lines up the two sides from these
+  for (let n = 0; n < CONTEXT && first > 0 && changes[first - 1]!.type === "normal"; n++) first--;
+  for (let n = 0; n < CONTEXT && last + 1 < changes.length && changes[last + 1]!.type === "normal"; n++) last++;
+  return changes.slice(first, last + 1);
 }
 
 /**
@@ -75,13 +80,18 @@ export function diffText(path: string, changes: Change[]): string {
   ].join("\n");
 }
 
-/** Every node's code, one diff per location. An empty diff means the file can't be read on the location's side. Each file's changes are worked out once per side. */
+/**
+ * Every node's code, one diff per location, and each file they point into, whole. An empty diff means the file
+ * can't be read on the location's side. Each file is read once, and its changes worked out once per side.
+ */
 export function codeFor(graph: Graph, base: string, head: string | undefined): GraphAndCode {
-  const files = new Map<string, Change[] | undefined>();
+  const files: Record<string, FileContents> = {};
+  const changes = new Map<string, Change[] | undefined>();
   const diff = (loc: Location) => {
+    const file = (files[loc.path] ??= { old: show(base, loc.path), new: show(head, loc.path) });
     const key = `${loc.side}:${loc.path}`;
-    if (!files.has(key)) files.set(key, fileChanges(loc.path, loc.side, base, head));
-    return diffText(loc.path, hunkIn(files.get(key) ?? [], loc.side, loc.start_line ?? loc.line, loc.line));
+    if (!changes.has(key)) changes.set(key, fileChanges(loc.path, loc.side, base, head, file));
+    return diffText(loc.path, hunkIn(changes.get(key) ?? [], loc.side, loc.start_line ?? loc.line, loc.line));
   };
-  return { graph, perNodeDiffs: Object.fromEntries(graph.nodes.map((n) => [n.id, n.code.map(diff)])) };
+  return { graph, perNodeDiffs: Object.fromEntries(graph.nodes.map((n) => [n.id, n.code.map(diff)])), files };
 }

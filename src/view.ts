@@ -5,8 +5,9 @@
 // Starts Vite's development server (hot reload included) and answers
 // /graph.json with the chosen file, which can be anywhere on disk, together
 // with the code each node points at, diffed between --base (default:
-// merge-base of origin/main and HEAD) and --head (default: the working tree). The
-// page only gets those, so nothing else on disk is exposed.
+// merge-base of origin/main and HEAD) and --head (default: the working tree),
+// and the files that code is in, whole, so the renderer can draw and expand
+// lines around it. The page gets nothing else from disk.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
