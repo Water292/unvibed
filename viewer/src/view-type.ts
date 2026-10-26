@@ -1,5 +1,5 @@
-// How the panel draws diffs. The values are react-diff-view's own names for
-// its two views, so a ViewType can be handed to it as is.
+// How the panel draws diffs. The values are what's saved in the browser, so
+// they stay the same whichever renderer draws them.
 import { enumGuard } from "./enum-guard.ts";
 
 export enum ViewType {

@@ -14,16 +14,17 @@ const diff = `diff --git a/f b/f
 const changes = gitdiff.parse(diff)[0]!.hunks.flatMap((h) => h.changes);
 const texts = (side: "LEFT" | "RIGHT", start: number, end: number) => hunkIn(changes, side, start, end).map((c) => c.content);
 
-test("a head range shows the lines it replaced", () => {
-  expect(texts("RIGHT", 2, 2)).toEqual(["b", "B"]);
+test("a head range shows the lines it replaced, with the unchanged lines around them", () => {
+  expect(texts("RIGHT", 2, 2)).toEqual(["a", "b", "B", "c"]);
 });
 
-test("a base range shows what replaced it, but not what was added after it", () => {
-  expect(texts("LEFT", 2, 3)).toEqual(["b", "B", "c"]);
+test("a base range shows what replaced it; surrounding lines stop at a change outside the range", () => {
+  // "d" was added after "c", outside the base range, so it isn't kept as context
+  expect(texts("LEFT", 2, 3)).toEqual(["a", "b", "B", "c"]);
 });
 
-test("the diff text's @@ line starts at the range's first line on each side and counts each side's lines", () => {
-  expect(diffText("f", hunkIn(changes, "RIGHT", 2, 4)).split("\n")[3]).toBe("@@ -2,2 +2,3 @@");
+test("the diff text's @@ line starts at the first line shown on each side and counts each side's lines", () => {
+  expect(diffText("f", hunkIn(changes, "RIGHT", 2, 4)).split("\n")[3]).toBe("@@ -1,3 +1,4 @@");
 });
 
 test("cut changes as diff text read back as the same lines, with the same line numbers on each side", () => {

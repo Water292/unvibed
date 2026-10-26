@@ -1,22 +1,38 @@
-// One location's code, drawn by react-diff-view, unified or split: line
+// One location's code, drawn by @git-diff-view/react, unified or split: line
 // numbers on both sides, added lines green, deleted lines red. Each location
 // comes as a small unified diff, holding only the location's own lines.
-import { Diff, Hunk, parseDiff } from "react-diff-view";
-import "react-diff-view/style/index.css";
+import { DiffModeEnum, DiffView } from "@git-diff-view/react";
+import "@git-diff-view/react/styles/diff-view-pure.css";
+import { useEffect, useState } from "react";
 import "./code-view.css";
+import type { FileContents } from "../../shared/graph-and-code.ts";
 import type { Location } from "../../shared/graph.ts";
 import { ViewType } from "./view-type.ts";
 
 const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
 
+/** The renderer doesn't follow the system's light or dark setting by itself, so this does. */
+function useDarkMode() {
+  const query = "(prefers-color-scheme: dark)";
+  const [dark, setDark] = useState(() => matchMedia(query).matches);
+  useEffect(() => {
+    const m = matchMedia(query);
+    const onChange = () => setDark(m.matches);
+    m.addEventListener("change", onChange);
+    return () => m.removeEventListener("change", onChange);
+  }, []);
+  return dark;
+}
+
 /**
  * An empty diff means the file can't be read on the location's side; no diff means the server sent none for it.
- * In split view, removed lines are paired with the added lines replacing them (zip), first with first; unified keeps the diff's order.
+ * file is the whole file at the base (old) and the head (new): the renderer draws lines from it, including the
+ * code of a location the PR didn't touch. (It could expand lines around a location from it too; see code-view.css.)
  */
-export function CodeView({ location: l, diff, viewType }: { location: Location; diff: string | undefined; viewType: ViewType }) {
+export function CodeView({ location: l, diff, file, viewType }: { location: Location; diff: string | undefined; file: FileContents | undefined; viewType: ViewType }) {
+  const dark = useDarkMode();
   const start = l.start_line ?? l.line;
   const side = l.side === "LEFT" ? "base" : "head";
-  const hunks = diff ? (parseDiff(diff, viewType === ViewType.Split ? { nearbySequences: "zip" } : {})[0]?.hunks ?? []) : [];
   return (
     <div style={{ marginTop: 16 }}>
       <div style={{ fontFamily: MONO, fontSize: 11, opacity: 0.7, marginBottom: 4 }}>
@@ -25,12 +41,21 @@ export function CodeView({ location: l, diff, viewType }: { location: Location; 
       </div>
       {diff !== undefined && (
         <div className="code-view">
-          {hunks.length === 0 ? (
+          {diff === "" ? (
             <div style={{ padding: "6px 8px", opacity: 0.7 }}>can't read this file on the {side} side</div>
           ) : (
-            <Diff viewType={viewType} diffType="modify" hunks={hunks}>
-              {(hunks) => hunks.map((h) => <Hunk key={h.content} hunk={h} />)}
-            </Diff>
+            <DiffView
+              data={{
+                oldFile: { fileName: l.path, content: file?.old },
+                newFile: { fileName: l.path, content: file?.new },
+                hunks: [diff],
+              }}
+              diffViewMode={viewType === ViewType.Split ? DiffModeEnum.Split : DiffModeEnum.Unified}
+              diffViewWrap={false}
+              diffViewHighlight={false}
+              diffViewTheme={dark ? "dark" : "light"}
+              diffViewFontSize={12}
+            />
           )}
         </div>
       )}
