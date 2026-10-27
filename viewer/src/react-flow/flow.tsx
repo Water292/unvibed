@@ -86,6 +86,8 @@ export function Flow({ graph, selected, onSelect, covered }: Props) {
   useEffect(() => {
     const style = (id: string) => ({
       width: NODE_WIDTH,
+      // clicking opens the box's panel; React Flow gives selectable boxes this cursor, but ours aren't
+      cursor: "pointer",
       opacity: active && !lit.has(id) ? DIM : 1,
       ...(id === selected ? { borderColor: HIGHLIGHT, boxShadow: `0 0 0 1px ${HIGHLIGHT}` } : {}),
     });
@@ -118,8 +120,10 @@ export function Flow({ graph, selected, onSelect, covered }: Props) {
       fitView
       minZoom={0.1}
       onInit={setFlow}
-      // only React Flow's measurements: where boxes sit, and which is selected, are this file's
-      onNodesChange={(changes) => onNodesChange(changes.filter((c) => c.type === "dimensions"))}
+      // where boxes sit, and which is selected, are this file's: React Flow only reports each box's measured size
+      nodesDraggable={false}
+      elementsSelectable={false}
+      onNodesChange={onNodesChange}
       onNodeClick={(_, n) => onSelect(n.id)}
       onPaneClick={() => onSelect(undefined)}
       onNodeMouseEnter={(_, n) => setHovered(n.id)}
