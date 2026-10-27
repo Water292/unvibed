@@ -68,9 +68,10 @@ test("read a graph: hover lights a box's neighbourhood, clicking opens its panel
   await expect(link(page, "greet", "add")).toHaveCount(1);
   await expect(link(page, "add", "version")).toHaveCount(1);
 
-  // Clicking selects it; it stays lit once the cursor leaves.
+  // Clicking selects it; it stays lit once the cursor leaves for the empty canvas (Playwright checks nothing covers
+  // the corner it hovers).
   await box(page, "greet").click();
-  await page.mouse.move(5, 5);
+  await page.locator(".react-flow__pane").hover({ position: { x: 1, y: 1 } });
   await expect(box(page, "add")).toHaveCSS("opacity", "1");
   await expect(box(page, "version")).not.toHaveCSS("opacity", "1");
 
