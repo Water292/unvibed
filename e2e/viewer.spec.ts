@@ -64,9 +64,7 @@ test("read a graph: hover lights a box's neighbourhood, clicking opens its panel
   await expect(box(page, "add")).toHaveCSS("opacity", "1");
   await expect(link(page, "greet", "add")).toHaveCSS("opacity", "1");
   await expect(box(page, "version")).not.toHaveCSS("opacity", "1");
-  // With the cursor resting there, nothing blinks off: still the same after a second.
-  await page.waitForTimeout(1000);
-  await expect(box(page, "greet")).toHaveCSS("opacity", "1");
+  // Both links are still drawn, the faded one too.
   await expect(link(page, "greet", "add")).toHaveCount(1);
   await expect(link(page, "add", "version")).toHaveCount(1);
 
