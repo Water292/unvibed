@@ -1,11 +1,10 @@
 // The viewer as a user meets it: `node src/view.ts graph.json` on a real repo, in a real browser.
 import { expect, test, type Page } from "@playwright/test";
-import { execFileSync, spawn, type ChildProcess } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { spawn, type ChildProcess } from "node:child_process";
 import { join } from "node:path";
 import { hashLines } from "../src/check.ts";
 import type { Graph } from "../shared/graph.ts";
+import { tempRepo } from "../test/temp-repo.ts";
 
 const VIEW = join(import.meta.dirname, "../src/view.ts");
 
@@ -31,16 +30,13 @@ const graph: Graph = {
 let server: ChildProcess;
 let url: string;
 test.beforeAll(async ({}, { parallelIndex }) => {
-  const dir = mkdtempSync(join(tmpdir(), "unvibed-view-"));
-  // a name and email for the commits, which CI's git doesn't have
-  const git = (...args: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: dir });
-  git("init", "-q");
-  writeFileSync(join(dir, "app.ts"), BASE);
+  const { dir, git, write } = tempRepo();
+  write("app.ts", BASE);
   git("add", ".");
   git("commit", "-qm", "base");
-  writeFileSync(join(dir, "app.ts"), HEAD);
+  write("app.ts", HEAD);
   git("commit", "-qam", "head");
-  writeFileSync(join(dir, "graph.json"), JSON.stringify(graph));
+  write("graph.json", JSON.stringify(graph));
 
   // Each Playwright worker running at the same time has its own parallelIndex, so its own port.
   const port = 4700 + parallelIndex;

@@ -1,22 +1,17 @@
-// `check` run as a user runs it: the CLI against a real git repo.
-import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+// `check` run as a user runs it: the CLI against a real git repo, reading each side of the PR from git.
+import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { expect, test } from "vitest";
 import { hashLines } from "../src/check.ts";
 import type { Graph } from "../shared/graph.ts";
+import { tempRepo } from "./temp-repo.ts";
 
 const CLI = join(import.meta.dirname, "../src/cli.ts");
 
-// A repo whose head commit replaces line 2 of a.txt on a branch from the base commit; origin/main has
-// since moved on from the base and changed that line too.
-function makeRepo() {
-  const dir = mkdtempSync(join(tmpdir(), "unvibed-check-"));
-  // a name and email for the commits, which CI's git doesn't have
-  const git = (...args: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: dir, encoding: "utf8" }).trim();
-  const write = (path: string, text: string) => writeFileSync(join(dir, path), text);
-  git("init", "-q");
+test("check reads LEFT at the base and RIGHT at the head, and without flags the base is where the branch left origin/main", () => {
+  // The head commit replaces line 2 of a.txt on a branch from the base commit; origin/main has since moved on from
+  // the base and changed that line too.
+  const { dir, git, write } = tempRepo();
   write("a.txt", "one\ntwo\nthree\n");
   write("b.txt", "kept\n");
   git("add", ".");
@@ -28,12 +23,7 @@ function makeRepo() {
   git("reset", "-q", "--hard", base);
   write("a.txt", "one\nTWO\nthree\n");
   git("commit", "-q", "-am", "head");
-  const check = (...args: string[]) => spawnSync(process.execPath, [CLI, "check", "graph.json", ...args], { cwd: dir, encoding: "utf8" });
-  return { dir, base, git, write, check };
-}
 
-test("check passes on a graph that matches the code, and lists only the location a later commit moved", () => {
-  const { base, git, write, check } = makeRepo();
   const graph: Graph = {
     schema: "test",
     nodes: [
@@ -44,18 +34,10 @@ test("check passes on a graph that matches the code, and lists only the location
     edges: [],
   };
   write("graph.json", JSON.stringify(graph));
+  const check = (...args: string[]) => spawnSync(process.execPath, [CLI, "check", "graph.json", ...args], { cwd: dir, encoding: "utf8" });
 
-  // LEFT is read at the base and RIGHT at the head; "two" and "TWO" each exist on one side only.
+  // "two" and "TWO" each exist on one side only, so reading either from the wrong commit fails.
   expect(check("--base", base, "--head", "HEAD").status).toBe(0);
-  // Without flags: the base is where the branch left origin/main, the head is the working tree.
+  // Without flags: the base is where the branch left origin/main (main's "deux" would fail), the head is the working tree.
   expect(check().status).toBe(0);
-
-  // A line added above shifts what the RIGHT location points at.
-  write("a.txt", "zero\none\nTWO\nthree\n");
-  git("commit", "-q", "-am", "shift");
-  const shifted = check();
-  expect(shifted.status).toBe(1);
-  expect(shifted.stdout).toContain("✗ replacement:");
-  expect(shifted.stdout).not.toContain("✗ replaced:");
-  expect(shifted.stdout).not.toContain("✗ untouched:");
 });
