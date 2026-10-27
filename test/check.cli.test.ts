@@ -13,10 +13,10 @@ const CLI = join(import.meta.dirname, "../src/cli.ts");
 // since moved on from the base and changed that line too.
 function makeRepo() {
   const dir = mkdtempSync(join(tmpdir(), "unvibed-check-"));
-  const env = { ...process.env, HOME: dir, GIT_CONFIG_NOSYSTEM: "1", GIT_AUTHOR_DATE: "2026-01-01T00:00:00Z", GIT_COMMITTER_DATE: "2026-01-01T00:00:00Z" };
-  const git = (...args: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: dir, env, encoding: "utf8" }).trim();
+  // a name and email for the commits, which CI's git doesn't have
+  const git = (...args: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: dir, encoding: "utf8" }).trim();
   const write = (path: string, text: string) => writeFileSync(join(dir, path), text);
-  git("init", "-q", "-b", "main");
+  git("init", "-q");
   write("a.txt", "one\ntwo\nthree\n");
   write("b.txt", "kept\n");
   git("add", ".");
@@ -28,7 +28,7 @@ function makeRepo() {
   git("reset", "-q", "--hard", base);
   write("a.txt", "one\nTWO\nthree\n");
   git("commit", "-q", "-am", "head");
-  const check = (...args: string[]) => spawnSync(process.execPath, [CLI, "check", "graph.json", ...args], { cwd: dir, env, encoding: "utf8" });
+  const check = (...args: string[]) => spawnSync(process.execPath, [CLI, "check", "graph.json", ...args], { cwd: dir, encoding: "utf8" });
   return { dir, base, git, write, check };
 }
 

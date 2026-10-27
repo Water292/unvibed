@@ -32,20 +32,20 @@ let server: ChildProcess;
 let url: string;
 test.beforeAll(async ({}, { parallelIndex }) => {
   const dir = mkdtempSync(join(tmpdir(), "unvibed-view-"));
-  const env = { ...process.env, HOME: dir, GIT_CONFIG_NOSYSTEM: "1", GIT_AUTHOR_DATE: "2026-01-01T00:00:00Z", GIT_COMMITTER_DATE: "2026-01-01T00:00:00Z" };
-  const git = (...args: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: dir, env, encoding: "utf8" }).trim();
-  git("init", "-q", "-b", "main");
+  // a name and email for the commits, which CI's git doesn't have
+  const git = (...args: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: dir });
+  git("init", "-q");
   writeFileSync(join(dir, "app.ts"), BASE);
   git("add", ".");
-  git("commit", "-q", "-m", "base");
+  git("commit", "-qm", "base");
   writeFileSync(join(dir, "app.ts"), HEAD);
-  git("commit", "-q", "-am", "head");
+  git("commit", "-qam", "head");
   writeFileSync(join(dir, "graph.json"), JSON.stringify(graph));
 
   // Each Playwright worker running at the same time has its own parallelIndex, so its own port.
   const port = 4700 + parallelIndex;
   url = `http://127.0.0.1:${port}/`;
-  server = spawn(process.execPath, [VIEW, "graph.json", "--base", "HEAD~1", "--head", "HEAD", "--port", String(port)], { cwd: dir, env, stdio: ["ignore", "ignore", "inherit"] });
+  server = spawn(process.execPath, [VIEW, "graph.json", "--base", "HEAD~1", "--head", "HEAD", "--port", String(port)], { cwd: dir, stdio: ["ignore", "ignore", "inherit"] });
   await expect.poll(() => fetch(url).then((r) => r.ok, () => false), { timeout: 15_000 }).toBe(true);
 });
 test.afterAll(() => void server.kill());
