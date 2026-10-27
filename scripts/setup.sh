@@ -6,8 +6,9 @@
 #   package-lock.json  npm dependencies
 # This script installs what mise can't (Apple's Command Line Tools, for git)
 # and mise itself (pinned by version and hash), then hands over to mise.
-# The only input it may ask for: your password (sudo, macOS) and a browser
-# click to log gh in.
+# The only input it may ask for: your password (sudo: macOS's Command Line
+# Tools, Linux's libraries for the e2e tests' browser) and a browser click to
+# log gh in.
 set -euo pipefail
 
 MISE_VERSION="2026.9.18"
@@ -80,6 +81,11 @@ say "mise install"
 "$MISE" install
 say "mise run install"
 "$MISE" run install
+if [[ "$os" == "linux" ]]; then
+  # The browser the e2e tests drive needs system libraries macOS already has; this installs them with apt (sudo).
+  say "Installing the e2e browser's system libraries. sudo may ask for your password."
+  "$MISE" exec -- npx playwright install-deps chromium
+fi
 
 # --- shell activation, so `node`, `gh` and `mise` are on PATH --------------
 case "$(basename "${SHELL:-}")" in
