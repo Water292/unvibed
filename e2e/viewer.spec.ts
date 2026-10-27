@@ -30,7 +30,7 @@ const graph: Graph = {
 // A repo with the base and head commits and the graph, and the viewer serving it.
 let server: ChildProcess;
 let url: string;
-test.beforeAll(async () => {
+test.beforeAll(async ({}, { parallelIndex }) => {
   const dir = mkdtempSync(join(tmpdir(), "unvibed-view-"));
   const env = { ...process.env, HOME: dir, GIT_CONFIG_NOSYSTEM: "1", GIT_AUTHOR_DATE: "2026-01-01T00:00:00Z", GIT_COMMITTER_DATE: "2026-01-01T00:00:00Z" };
   const git = (...args: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: dir, env, encoding: "utf8" }).trim();
@@ -42,17 +42,11 @@ test.beforeAll(async () => {
   git("commit", "-q", "-am", "head");
   writeFileSync(join(dir, "graph.json"), JSON.stringify(graph));
 
-  server = spawn(process.execPath, [VIEW, "graph.json", "--base", "HEAD~1", "--head", "HEAD"], { cwd: dir, env });
-  url = await new Promise<string>((resolve, reject) => {
-    let out = "";
-    server.stdout!.on("data", (d) => {
-      out += d;
-      // Vite prints the address it got, colouring it with escape codes.
-      const m = out.replace(/\x1b\[[0-9;]*m/g, "").match(/http:\/\/127\.0\.0\.1:\d+\//);
-      if (m) resolve(m[0]);
-    });
-    server.on("exit", () => reject(new Error(`viewer exited:\n${out}`)));
-  });
+  // Each Playwright worker running at the same time has its own parallelIndex, so its own port.
+  const port = 4700 + parallelIndex;
+  url = `http://127.0.0.1:${port}/`;
+  server = spawn(process.execPath, [VIEW, "graph.json", "--base", "HEAD~1", "--head", "HEAD", "--port", String(port)], { cwd: dir, env, stdio: ["ignore", "ignore", "inherit"] });
+  await expect.poll(() => fetch(url).then((r) => r.ok, () => false), { timeout: 15_000 }).toBe(true);
 });
 test.afterAll(() => void server.kill());
 
