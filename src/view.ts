@@ -1,26 +1,35 @@
 // Opens the viewer on a graph file:
 //
-//   node src/view.ts <graph.json> [--base <rev>] [--head <rev>] [--port <n>]
+//   node src/view.ts <graph.json> [--base <rev>] [--head <rev>] [--port <n>] [--review <name>]
 //
 // Starts Vite's development server (hot reload included) and answers
 // /graph.json with the chosen file, which can be anywhere on disk, together
 // with the code each node points at, diffed between --base (default:
 // merge-base of origin/main and HEAD) and --head (default: the working tree),
-// and the files that code is in, whole, so the renderer can draw and expand
-// lines around it. The page gets nothing else from disk. It listens on --port,
-// failing if that's taken; without it, on the first free port from 4620.
+// the files that code is in, whole, so the renderer can draw and expand lines
+// around it, and the hashes of the lines marked reviewed in this review: the
+// one --review names, else the branch --head names, else the branch checked
+// out at startup. Without --head the code is the working tree, so if another
+// branch is checked out later, requests are refused until it's back. POST
+// /mark records a mark.
+// The page gets nothing else from disk. It listens on --port, failing if
+// that's taken; without it, on the first free port from 4620.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { text } from "node:stream/consumers";
 import { parseArgs } from "node:util";
 import { createServer, type Plugin } from "vite";
 import { defaultBase } from "./git.ts";
 import type { Graph } from "../shared/graph.ts";
 import { codeFor } from "./hunks.ts";
+import { createReview, currentBranch, isBranch, isReviewName, mark, readReview } from "./review.ts";
+import { z } from "zod";
+import { MarkRequest, type GraphAndCode } from "../shared/graph-and-code.ts";
 
-const usage = "usage: node src/view.ts <graph.json> [--base <rev>] [--head <rev>] [--port <n>]";
+const usage = "usage: node src/view.ts <graph.json> [--base <rev>] [--head <rev>] [--port <n>] [--review <name>]";
 let args;
 try {
-  args = parseArgs({ allowPositionals: true, options: { base: { type: "string" }, head: { type: "string" }, port: { type: "string" } } });
+  args = parseArgs({ allowPositionals: true, options: { base: { type: "string" }, head: { type: "string" }, port: { type: "string" }, review: { type: "string" } } });
 } catch (e) {
   console.error(`${(e as Error).message}\n${usage}`);
   process.exit(2);
@@ -38,11 +47,44 @@ if (port !== undefined && !Number.isInteger(port)) {
   console.error(`--port must be a number\n${usage}`);
   process.exit(2);
 }
+if (head !== undefined && args.values.review === undefined && !isBranch(head)) {
+  console.error(`${head} isn't a branch: name the review with --review <name>\n${usage}`);
+  process.exit(2);
+}
+const startingBranch = currentBranch();
+const review = args.values.review ?? head ?? startingBranch;
+if (review === undefined) {
+  console.error(`no branch is checked out: name the review with --review <name>\n${usage}`);
+  process.exit(2);
+}
+if (!isReviewName(review)) {
+  console.error(`${review} isn't a name git accepts for a branch: name the review with --review <name>\n${usage}`);
+  process.exit(2);
+}
+try {
+  createReview(review);
+} catch (e) {
+  console.error(`${(e as Error).message}\nname the review with --review <name>\n${usage}`);
+  process.exit(2);
+}
+/** Why requests are refused: the working tree is shown and another branch is checked out than at startup. */
+function describeBranchChange(): string | undefined {
+  if (head !== undefined) return undefined;
+  const branch = currentBranch();
+  if (branch === startingBranch) return undefined;
+  return `${startingBranch ?? "a detached HEAD"} was checked out when the viewer started, ${branch ?? "a detached HEAD"} is now: check it out again or restart the viewer`;
+}
 
 const serveGraph: Plugin = {
   name: "serve-graph",
   configureServer(server) {
     server.middlewares.use("/graph.json", (_req, res) => {
+      const branchChange = describeBranchChange();
+      if (branchChange) {
+        res.statusCode = 409;
+        res.end(branchChange);
+        return;
+      }
       let graph: Graph;
       try {
         graph = JSON.parse(readFileSync(path, "utf8")); // read fresh on every request
@@ -52,11 +94,47 @@ const serveGraph: Plugin = {
         return;
       }
       try {
+        const code = codeFor(base, head);
+        const perNodeLocations = Object.fromEntries(graph.nodes.map((n) => [n.id, n.code.map(code.createLocationView)]));
+        const { reviewed } = readReview(review).state;
+        const answer: GraphAndCode = { graph, perNodeLocations, files: code.files, reviewed };
         res.setHeader("content-type", "application/json");
-        res.end(JSON.stringify(codeFor(graph, base, head)));
+        res.end(JSON.stringify(answer));
       } catch (e) {
         res.statusCode = 500;
         res.end(`can't read the code: ${(e as Error).message}`);
+      }
+    });
+    server.middlewares.use("/mark", async (req, res) => {
+      if (req.method !== "POST") {
+        res.statusCode = 405;
+        res.end("POST a mark");
+        return;
+      }
+      let body: unknown;
+      try {
+        body = JSON.parse(await text(req));
+      } catch {
+        body = undefined; // not JSON: the schema below refuses it
+      }
+      const branchChange = describeBranchChange();
+      if (branchChange) {
+        res.statusCode = 409;
+        res.end(branchChange);
+        return;
+      }
+      const request = MarkRequest.safeParse(body);
+      if (!request.success) {
+        res.statusCode = 400;
+        res.end(z.prettifyError(request.error));
+        return;
+      }
+      try {
+        mark(review, request.data.hash, request.data.reviewed);
+        res.end("ok");
+      } catch (e) {
+        res.statusCode = 500;
+        res.end((e as Error).message);
       }
     });
   },

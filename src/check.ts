@@ -21,7 +21,7 @@ export function hashLines(lines: string[]): string {
   return createHash("sha1").update(`blob ${content.length}\0`).update(content).digest("hex");
 }
 
-function splitLines(text: string): string[] {
+export function splitLines(text: string): string[] {
   const lines = text.split("\n");
   if (lines.at(-1) === "") lines.pop();
   return lines;

@@ -26,22 +26,23 @@ const graph: Graph = {
   ],
 };
 
-// A repo with the base and head commits and the graph, and the viewer serving it.
+// A repo with the base committed and the PR's change left uncommitted, its graph, and the viewer serving them.
+let repo: ReturnType<typeof tempRepo>;
 let server: ChildProcess;
 let url: string;
 test.beforeAll(async ({}, { parallelIndex }) => {
-  const { dir, git, write } = tempRepo();
+  repo = tempRepo();
+  const { dir, git, write } = repo;
   write("app.ts", BASE);
   git("add", ".");
   git("commit", "-qm", "base");
   write("app.ts", HEAD);
-  git("commit", "-qam", "head");
   write("graph.json", JSON.stringify(graph));
 
   // Each Playwright worker running at the same time has its own parallelIndex, so its own port.
   const port = 4700 + parallelIndex;
   url = `http://127.0.0.1:${port}/`;
-  server = spawn(process.execPath, [VIEW, "graph.json", "--base", "HEAD~1", "--head", "HEAD", "--port", String(port)], { cwd: dir, stdio: ["ignore", "ignore", "inherit"] });
+  server = spawn(process.execPath, [VIEW, "graph.json", "--base", "HEAD", "--port", String(port), "--review", "e2e"], { cwd: dir, stdio: ["ignore", "ignore", "inherit"] });
   await expect.poll(() => fetch(url).then((r) => r.ok, () => false), { timeout: 15_000 }).toBe(true);
 });
 test.afterAll(() => void server.kill());
@@ -169,4 +170,54 @@ test("the panel keeps its share of the window as the window is resized, and stop
   await page.mouse.move(0, 400, { steps: 5 });
   await page.mouse.up();
   await expect.poll(width).toBe(1000 - 120);
+});
+
+test.describe("marking code reviewed", () => {
+  // Put everything back for the tests that follow.
+  test.afterEach(() => {
+    repo.write("app.ts", HEAD);
+    repo.git("update-ref", "-d", "refs/unvibed/reviews/e2e");
+  });
+
+  const getReviewedCheckbox = (page: Page) => panel(page).getByRole("checkbox", { name: "reviewed" });
+  /** Loads the page, opens a box's panel, and waits until the panel contains expectedText. */
+  const openBox = async (page: Page, id: string, expectedText: string) => {
+    await page.goto(url);
+    await box(page, id).click();
+    await expect(panel(page)).toContainText(expectedText);
+  };
+  const greetLineInPr = 'return "hi " + name;';
+  const editedGreetLine = 'return "hey " + name;';
+  const appWithEditedGreet = HEAD.replace(greetLineInPr, editedGreetLine);
+
+  test("ticking a location's box marks it reviewed, and it stays reviewed after a reload", async ({ page }) => {
+    await openBox(page, "greet", greetLineInPr);
+    await expect(getReviewedCheckbox(page)).not.toBeChecked();
+    await getReviewedCheckbox(page).click(); // the box ticks once the server has saved the mark
+    await expect(getReviewedCheckbox(page)).toBeChecked();
+
+    await openBox(page, "greet", greetLineInPr);
+    await expect(getReviewedCheckbox(page)).toBeChecked();
+    expect(repo.git("for-each-ref", "--format=%(refname)", "refs/unvibed")).toBe("refs/unvibed/reviews/e2e");
+
+    await getReviewedCheckbox(page).click();
+    await openBox(page, "greet", greetLineInPr);
+    await expect(getReviewedCheckbox(page)).not.toBeChecked();
+  });
+
+  test("ticking code that changed after the page showed it marks the lines on screen", async ({ page }) => {
+    await openBox(page, "greet", greetLineInPr);
+    // Saved while the page still shows the old line.
+    repo.write("app.ts", appWithEditedGreet);
+    await getReviewedCheckbox(page).click();
+    await expect(getReviewedCheckbox(page)).toBeChecked();
+
+    // After a reload the page shows the new line, which wasn't ticked.
+    await openBox(page, "greet", editedGreetLine);
+    await expect(getReviewedCheckbox(page)).not.toBeChecked();
+
+    repo.write("app.ts", HEAD);
+    await openBox(page, "greet", greetLineInPr);
+    await expect(getReviewedCheckbox(page)).toBeChecked();
+  });
 });

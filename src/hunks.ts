@@ -3,9 +3,10 @@
 // the files those locations point into, whole, which the renderer draws lines
 // from. Runs in Node (view.ts).
 import gitdiffModule, { type Change } from "gitdiff-parser";
-import { git, show } from "./git.ts";
-import type { FileContents, GraphAndCode } from "../shared/graph-and-code.ts";
-import type { Graph, Location } from "../shared/graph.ts";
+import { hashLines, splitLines } from "./check.ts";
+import { git, gitWithInput, show } from "./git.ts";
+import type { FileContents, LocationView } from "../shared/graph-and-code.ts";
+import type { Location } from "../shared/graph.ts";
 
 /**
  * The parser. gitdiff-parser is CommonJS and its types say `export default`, so TypeScript expects the
@@ -17,21 +18,19 @@ export const gitdiff = gitdiffModule as unknown as typeof gitdiffModule.default;
 const oldLine = (c: Change) => (c.type === "normal" ? c.oldLineNumber : c.type === "delete" ? c.lineNumber : -1);
 const newLine = (c: Change) => (c.type === "normal" ? c.newLineNumber : c.type === "insert" ? c.lineNumber : -1);
 
+/** A change as a unified diff line: marked +, - or space. */
+const toDiffLine = (c: Change) => (c.type === "insert" ? "+" : c.type === "delete" ? "-" : " ") + c.content;
+
 /**
- * Every line of a file between base and head (undefined = the working tree),
- * as changes; undefined if the file can't be read on the given side. git
- * diffs the whole file, so nothing is left out. When git shows no
- * difference, the file is either unchanged or new and not yet tracked.
+ * Every line between two texts of a file (undefined = the file isn't there), as changes; unchanged lines carry their
+ * number in both. git diffs the texts themselves, stored as blobs, so the diff is of exactly what was read.
  */
-function fileChanges(path: string, side: Location["side"], base: string, head: string | undefined, file: FileContents): Change[] | undefined {
-  const mine = side === "LEFT" ? file.old : file.new;
-  if (mine === undefined) return undefined;
-  const diff = git("diff", "--unified=100000", base, ...(head ? [head] : []), "--", path);
-  if (diff) return gitdiff.parse(diff)[0]?.hunks.flatMap((h) => h.changes) ?? [];
-  const lines = mine.replace(/\n$/, "").split("\n");
-  if (file.old === undefined)
-    return lines.map((content, i): Change => ({ type: "insert", isInsert: true, lineNumber: i + 1, content }));
-  return lines.map((content, i): Change => ({ type: "normal", isNormal: true, oldLineNumber: i + 1, newLineNumber: i + 1, content }));
+export function getChanges(before: string | undefined, after: string | undefined): Change[] {
+  if (before === after)
+    return splitLines(before ?? "").map((content, i): Change => ({ type: "normal", isNormal: true, oldLineNumber: i + 1, newLineNumber: i + 1, content }));
+  const blob = (text: string | undefined) => gitWithInput(text ?? "", "hash-object", "-w", "--stdin").trim();
+  const diff = git("diff", "--unified=100000", blob(before), blob(after));
+  return gitdiff.parse(diff)[0]?.hunks.flatMap((h) => h.changes) ?? [];
 }
 
 /** Unchanged lines kept around a location's lines, as git keeps around a change. */
@@ -70,28 +69,35 @@ export function diffText(path: string, changes: Change[]): string {
   if (!changes.length) return "";
   const olds = changes.map(oldLine).filter((n) => n > 0);
   const news = changes.map(newLine).filter((n) => n > 0);
-  const lines = changes.map((c) => (c.type === "insert" ? "+" : c.type === "delete" ? "-" : " ") + c.content);
   return [
     `diff --git a/${path} b/${path}`,
     `--- a/${path}`,
     `+++ b/${path}`,
     `@@ -${olds[0] ?? 0},${olds.length} +${news[0] ?? 0},${news.length} @@`,
-    ...lines,
-  ].join("\n");
+    ...changes.map(toDiffLine),
+  ].join("\n") + "\n"; // every line ends in a newline, the last one too, as in git's own diffs
 }
 
 /**
- * Every node's code, one diff per location, and each file they point into, whole. An empty diff means the file
- * can't be read on the location's side. Each file is read once, and its changes worked out once per side.
+ * What the page shows of each location: createLocationView gives its diff (empty if the file isn't there on its side)
+ * and the hash a mark is made by (empty if there's nothing in its range); files has every file read, whole. Each file
+ * is read once, and every location's diff and hash come from that one read.
  */
-export function codeFor(graph: Graph, base: string, head: string | undefined): GraphAndCode {
+export function codeFor(base: string, head: string | undefined) {
   const files: Record<string, FileContents> = {};
-  const changes = new Map<string, Change[] | undefined>();
-  const diff = (loc: Location) => {
-    const file = (files[loc.path] ??= { old: show(base, loc.path), new: show(head, loc.path) });
-    const key = `${loc.side}:${loc.path}`;
-    if (!changes.has(key)) changes.set(key, fileChanges(loc.path, loc.side, base, head, file));
-    return diffText(loc.path, hunkIn(changes.get(key) ?? [], loc.side, loc.start_line ?? loc.line, loc.line));
+  const changes = new Map<string, Change[]>();
+  const read = (path: string) => (files[path] ??= { old: show(base, path), new: show(head, path) });
+  const createLocationView = (location: Location): LocationView => {
+    const file = read(location.path);
+    if ((location.side === "LEFT" ? file.old : file.new) === undefined) return { location, diff: "", hash: "" };
+    if (!changes.has(location.path)) changes.set(location.path, getChanges(file.old, file.new));
+    const start = location.start_line ?? location.line;
+    const hunk = hunkIn(changes.get(location.path)!, location.side, start, location.line);
+    // The hash covers the location's own rows, removed lines included, and not the unchanged lines around them or any
+    // line numbers: the same lines, changed the same way, keep their mark wherever they move.
+    const line = location.side === "LEFT" ? oldLine : newLine;
+    const own = hunk.filter((c) => c.type !== "normal" || (line(c) >= start && line(c) <= location.line));
+    return { location, diff: diffText(location.path, hunk), hash: own.length ? hashLines(own.map(toDiffLine)) : "" };
   };
-  return { graph, perNodeDiffs: Object.fromEntries(graph.nodes.map((n) => [n.id, n.code.map(diff)])), files };
+  return { createLocationView, files };
 }
