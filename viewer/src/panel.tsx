@@ -1,7 +1,8 @@
 // The side panel for the selected node: its explanation, the nodes it links
-// to and from, and the code it points at.
+// to and from, and the code it points at, with a reviewed box on each
+// location.
 import { useState, type PointerEvent } from "react";
-import type { FileContents } from "../../shared/graph-and-code.ts";
+import type { FileContents, LocationView } from "../../shared/graph-and-code.ts";
 import type { Graph, Node } from "../../shared/graph.ts";
 import { CodeView } from "./code-view.tsx";
 import { ViewType } from "./view-type.ts";
@@ -17,15 +18,13 @@ const MIN_WIDTH = 320;
 const CANVAS_LEFT = 120;
 export const clampPanelWidth = (width: number, windowWidth: number) => Math.max(MIN_WIDTH, Math.min(width, windowWidth - CANVAS_LEFT));
 
-/**
- * diffsForNode: one unified diff per location of the node, in order. files: the files they're in, by path. width: worked out once by the caller, which also tells the canvas.
- * onWidth: called with the width the panel's left edge was dragged to, once the drag ends.
- */
 type Props = {
   graph: Graph;
   node: Node;
-  diffsForNode: string[];
+  locations: LocationView[];
   files: Record<string, FileContents>;
+  reviewed: ReadonlySet<string>;
+  onMark: (view: LocationView, reviewed: boolean) => Promise<string | undefined>;
   onSelect: (id: string | undefined) => void;
   width: number;
   onWidth: (width: number) => void;
@@ -33,7 +32,14 @@ type Props = {
   onViewType: (viewType: ViewType) => void;
 };
 
-export function Panel({ graph, node, diffsForNode, files, onSelect, width, onWidth, viewType, onViewType }: Props) {
+export function Panel({ graph, node, locations, files, reviewed, onMark, onSelect, width, onWidth, viewType, onViewType }: Props) {
+  // The last mark that couldn't be saved: which location, and why.
+  const [failure, setFailure] = useState<{ index: number; message: string }>();
+  const markAndReport = async (index: number, view: LocationView, mark: boolean) => {
+    setFailure(undefined);
+    const message = await onMark(view, mark);
+    if (message !== undefined) setFailure({ index, message });
+  };
   // While the edge is being dragged only the panel follows it; the new width
   // is reported once, on release, so the canvas refits once rather than on
   // every move.
@@ -91,8 +97,17 @@ export function Panel({ graph, node, diffsForNode, files, onSelect, width, onWid
         <p style={{ fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{node.text}</p>
         {links(incoming, "←")}
         {links(outgoing, "→")}
-        {node.code.map((location, i) => (
-          <CodeView key={i} location={location} diff={diffsForNode[i]} file={files[location.path]} viewType={viewType} />
+        {locations.map((view, i) => (
+          <CodeView
+            key={i}
+            location={view.location}
+            diff={view.diff}
+            file={files[view.location.path]}
+            viewType={viewType}
+            reviewed={reviewed.has(view.hash)}
+            onReviewed={(r) => markAndReport(i, view, r)}
+            failure={failure?.index === i ? failure.message : undefined}
+          />
         ))}
       </aside>
     </>

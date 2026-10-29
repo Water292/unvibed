@@ -4,6 +4,10 @@ import { readFileSync } from "node:fs";
 export const git = (...args: string[]) =>
   execFileSync("git", args, { encoding: "utf8", maxBuffer: 1 << 28, stdio: ["ignore", "pipe", "ignore"] });
 
+/** Runs git with input on stdin. */
+export const gitWithInput = (input: string, ...args: string[]) =>
+  execFileSync("git", args, { encoding: "utf8", maxBuffer: 1 << 28, input, stdio: ["pipe", "pipe", "ignore"] });
+
 /** A file as it is at a commit, or on disk when no commit is given; undefined if it doesn't exist there. */
 export function show(rev: string | undefined, path: string): string | undefined {
   try {

@@ -25,40 +25,55 @@ function useDarkMode() {
 }
 
 /**
- * An empty diff means the file can't be read on the location's side; no diff means the server sent none for it.
+ * An empty diff means the file can't be read on the location's side.
  * file is the whole file at the base (old) and the head (new): the renderer draws lines from it, including the
  * code of a location the PR didn't touch. (It could expand lines around a location from it too; see code-view.css.)
+ * onReviewed: called when the box is ticked or cleared. failure: why the last tick couldn't be saved, if it couldn't.
  */
-export function CodeView({ location: l, diff, file, viewType }: { location: Location; diff: string | undefined; file: FileContents | undefined; viewType: ViewType }) {
+type Props = {
+  location: Location;
+  diff: string;
+  file: FileContents | undefined;
+  viewType: ViewType;
+  reviewed: boolean;
+  onReviewed: (reviewed: boolean) => void;
+  failure: string | undefined;
+};
+
+export function CodeView({ location: l, diff, file, viewType, reviewed, onReviewed, failure }: Props) {
   const dark = useDarkMode();
   const start = l.start_line ?? l.line;
   const side = l.side === "LEFT" ? "base" : "head";
   return (
     <div style={{ marginTop: 16 }}>
-      <div style={{ fontFamily: MONO, fontSize: 11, opacity: 0.7, marginBottom: 4 }}>
-        {l.path}:{start}
-        {start !== l.line ? `-${l.line}` : ""} ({side})
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+        <span style={{ fontFamily: MONO, fontSize: 11, opacity: 0.7 }}>
+          {l.path}:{start}
+          {start !== l.line ? `-${l.line}` : ""} ({side})
+        </span>
+        <label style={{ fontSize: 11 }}>
+          <input type="checkbox" checked={reviewed} onChange={(e) => onReviewed(e.target.checked)} /> reviewed
+        </label>
       </div>
-      {diff !== undefined && (
-        <div className="code-view">
-          {diff === "" ? (
-            <div style={{ padding: "6px 8px", opacity: 0.7 }}>can't read this file on the {side} side</div>
-          ) : (
-            <DiffView
-              data={{
-                oldFile: { fileName: l.path, content: file?.old },
-                newFile: { fileName: l.path, content: file?.new },
-                hunks: [diff],
-              }}
-              diffViewMode={viewType === ViewType.Split ? DiffModeEnum.Split : DiffModeEnum.Unified}
-              diffViewWrap={false}
-              diffViewHighlight={false}
-              diffViewTheme={dark ? "dark" : "light"}
-              diffViewFontSize={12}
-            />
-          )}
-        </div>
-      )}
+      {failure && <div style={{ fontSize: 11, color: "#dc2626", marginBottom: 4 }}>Couldn't save: {failure}</div>}
+      <div className="code-view">
+        {diff === "" ? (
+          <div style={{ padding: "6px 8px", opacity: 0.7 }}>can't read this file on the {side} side</div>
+        ) : (
+          <DiffView
+            data={{
+              oldFile: { fileName: l.path, content: file?.old },
+              newFile: { fileName: l.path, content: file?.new },
+              hunks: [diff],
+            }}
+            diffViewMode={viewType === ViewType.Split ? DiffModeEnum.Split : DiffModeEnum.Unified}
+            diffViewWrap={false}
+            diffViewHighlight={false}
+            diffViewTheme={dark ? "dark" : "light"}
+            diffViewFontSize={12}
+          />
+        )}
+      </div>
     </div>
   );
 }
