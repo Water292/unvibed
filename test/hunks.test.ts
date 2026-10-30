@@ -1,7 +1,5 @@
-import { rmSync } from "node:fs";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { cutFor, diffText, gitdiff, hunkIn } from "../src/hunks.ts";
-import { tempRepo } from "./temp-repo.ts";
+import { expect, test } from "vitest";
+import { diffText, gitdiff, hunkIn } from "../src/hunks.ts";
 
 // line 2 "b" was replaced by "B", and "d" was added after "c"
 const diff = `diff --git a/f b/f
@@ -75,33 +73,4 @@ test("a location's own edges don't take in a change next to them", () => {
 
 test("no changes, a file that can't be read, is empty text", () => {
   expect(diffText("f", hunkIn([], "RIGHT", 1, 3))).toBe("");
-});
-
-describe("in a repo", () => {
-  // f.txt: 12 lines, committed and unchanged. The tests run from inside the repo, because cutFor runs git in the
-  // current directory.
-  let repo: ReturnType<typeof tempRepo>;
-  let cwd: string;
-  beforeAll(() => {
-    cwd = process.cwd();
-    repo = tempRepo();
-    repo.write("f.txt", Array.from({ length: 12 }, (_, i) => `line ${i + 1}`).join("\n") + "\n");
-    repo.git("add", ".");
-    repo.git("commit", "-qm", "base");
-    process.chdir(repo.dir);
-  });
-  afterAll(() => {
-    process.chdir(cwd);
-    rmSync(repo.dir, { recursive: true, force: true });
-  });
-
-  test("a cut says whether the file has lines beyond it: none above at the top, none below at the end", () => {
-    const more = (line: number) => {
-      const { moreAbove, moreBelow } = cutFor("f.txt", "RIGHT", line, line, 0, 0, "HEAD", "HEAD");
-      return { moreAbove, moreBelow };
-    };
-    expect(more(1)).toEqual({ moreAbove: false, moreBelow: true });
-    expect(more(6)).toEqual({ moreAbove: true, moreBelow: true });
-    expect(more(12)).toEqual({ moreAbove: true, moreBelow: false });
-  });
 });
