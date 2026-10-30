@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
 import { join } from "node:path";
 import { hashLines } from "../src/check.ts";
+import { clearReview, createTables } from "../src/review.ts";
 import type { Graph } from "../shared/graph.ts";
 import { tempRepo } from "../test/temp-repo.ts";
 
@@ -38,6 +39,8 @@ test.beforeAll(async ({}, { parallelIndex }) => {
   git("commit", "-qm", "base");
   write("app.ts", HEAD);
   write("graph.json", JSON.stringify(graph));
+  process.chdir(dir); // so createTables opens this repo's database, which the viewer shares
+  createTables();
 
   // Each Playwright worker running at the same time has its own parallelIndex, so its own port.
   const port = 4700 + parallelIndex;
@@ -174,10 +177,9 @@ test("the panel keeps its share of the window as the window is resized, and stop
 
 test.describe("marking code reviewed", () => {
   // Put everything back for the tests that follow.
-  test.afterEach(async () => {
+  test.afterEach(() => {
     repo.write("app.ts", HEAD);
-    const { reviewed } = await fetch(`${url}graph.json`).then((r) => r.json());
-    for (const hash of reviewed) await fetch(`${url}mark`, { method: "POST", body: JSON.stringify({ hash, reviewed: false }) });
+    clearReview("e2e");
   });
 
   const getReviewedCheckbox = (page: Page) => panel(page).getByRole("checkbox", { name: "reviewed" });

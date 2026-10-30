@@ -58,3 +58,8 @@ export function mark(review: string, hash: string, reviewed: boolean): void {
   if (reviewed) db.prepare("INSERT OR IGNORE INTO reviewed (review, hash) VALUES (?, ?)").run(review, hash);
   else db.prepare("DELETE FROM reviewed WHERE review = ? AND hash = ?").run(review, hash);
 }
+
+/** Unmarks everything in a review. */
+export function clearReview(review: string): void {
+  db.prepare("DELETE FROM reviewed WHERE review = ?").run(review);
+}
