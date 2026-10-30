@@ -4,7 +4,19 @@
   border: 1px solid rgba(128, 128, 128, 0.3);
   border-radius: 6px;
 }
-/* No expand rows for now: the renderer is given only the location's part of a
-   file's diff, so lines it expands into would show other changes in the file
-   as unchanged. */
+/* The renderer's @@ row above a cut that doesn't start at line 1: ↑ takes its place. */
 .code-view tr[data-state="hunk"] { display: none; }
+/* ↑ and ↓: full-width rows above and below the code, like a diff's expand rows. */
+.code-view-more {
+  display: block;
+  width: 100%;
+  padding: 2px 0;
+  border: none;
+  background: rgba(128, 128, 128, 0.12);
+  color: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.code-view-more:hover {
+  background: rgba(128, 128, 128, 0.25);
+}

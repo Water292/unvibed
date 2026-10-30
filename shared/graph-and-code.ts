@@ -1,25 +1,29 @@
 import { z } from "zod";
-import type { Graph, Location } from "./graph.ts";
 
-/** A file as it is at the base (old) and the head (new); a side is absent when the file can't be read there. */
-export type FileContents = { old?: string; new?: string };
+/** A whole number written in decimal digits; Number() alone would also take "", "0x10", "1e3" and "+3". */
+const whole = z.string().regex(/^\d+$/, "must be a whole number").transform(Number);
+
+/** What a /code request holds: which lines of which file, on which side, and how far to widen them. */
+export const CodeQuery = z
+  .object({
+    path: z.string().min(1),
+    side: z.enum(["LEFT", "RIGHT"]),
+    start: whole.pipe(z.number().min(1)),
+    end: whole,
+    above: whole.default(0),
+    below: whole.default(0),
+  })
+  .refine((q) => q.end >= q.start, { message: "end must be at least start", path: ["end"] });
 
 /**
- * One of a node's locations as the page shows it: its diff, and the hash of its own rows of that diff (empty if
- * there's nothing in its range), which marks are made by.
+ * One location's code: its lines as unified diff text (empty when the file can't be read on the location's side),
+ * whether the file has lines beyond them, above and below, and the hash of the location's own rows (empty if there's
+ * nothing in its range), which marks are made by. Widening never changes the hash.
  */
-export type LocationView = { location: Location; diff: string; hash: string };
+export type CodeCut = { diff: string; moreAbove: boolean; moreBelow: boolean; hash: string };
 
-/**
- * What the page loads: the graph; each node's locations, by node id; the files they point into, whole, by path, for
- * the renderer to draw lines from; and the hashes of the lines marked reviewed.
- */
-export type GraphAndCode = {
-  graph: Graph;
-  perNodeLocations: Record<string, LocationView[]>;
-  files: Record<string, FileContents>;
-  reviewed: string[];
-};
+/** What /code answers: the cut, and whether its lines are marked reviewed. */
+export type LocationCode = CodeCut & { reviewed: boolean };
 
 /** Marks the lines with this hash reviewed, or not. The server checks each request against it. */
 export const MarkRequest = z.object({ hash: z.string().min(1), reviewed: z.boolean() });

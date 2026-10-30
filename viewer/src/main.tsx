@@ -1,12 +1,13 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import type { GraphAndCode, LocationView, MarkRequest } from "../../shared/graph-and-code.ts";
+import type { MarkRequest } from "../../shared/graph-and-code.ts";
+import type { Graph } from "../../shared/graph.ts";
 import { clampPanelWidth, initialPanelWidth, Panel } from "./panel.tsx";
 import { Flow } from "./react-flow/flow.tsx";
 import { isViewType, ViewType } from "./view-type.ts";
 
-async function load(signal: AbortSignal): Promise<GraphAndCode> {
-  const res = await fetch("/graph.json", { signal });
+async function load(): Promise<Graph> {
+  const res = await fetch("/graph.json");
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -51,8 +52,10 @@ function savePanelShare(share: number) {
 }
 
 function App() {
-  const [data, setData] = useState<GraphAndCode>();
-  const [reviewed, setReviewed] = useState<ReadonlySet<string>>(new Set()); // hashes of the lines marked reviewed
+  const [graph, setGraph] = useState<Graph>();
+  // The marks made since the page loaded, by hash: they outrank what a box's code came with, so every box with the
+  // same lines follows a tick, on screen or fetched later.
+  const [marks, setMarks] = useState<ReadonlyMap<string, boolean>>(new Map());
   const [error, setError] = useState<string>();
   const [selected, setSelected] = useState<string>();
   const [viewType, setViewType] = useState(savedViewType);
@@ -70,33 +73,28 @@ function App() {
   const [draggedShare, setDraggedShare] = useState(savedPanelShare);
   const changeWidth = (w: number) => (setDraggedShare(w / windowWidth), savePanelShare(w / windowWidth));
 
-  // In development React runs this twice when the page opens (StrictMode); cancelling the first load means only one
-  // answer is drawn.
+  // In development React runs this twice when the page opens (StrictMode); the first run's answer is ignored, so
+  // only one is drawn.
   useEffect(() => {
-    const loading = new AbortController();
-    load(loading.signal).then(
-      (d) => (setData(d), setReviewed(new Set(d.reviewed))),
-      (e: Error) => loading.signal.aborted || setError(e.message),
+    let current = true;
+    load().then(
+      (g) => current && setGraph(g),
+      (e: Error) => current && setError(e.message),
     );
-    return () => loading.abort();
+    return () => {
+      current = false;
+    };
   }, []);
 
   if (error) return <p style={{ padding: 16, fontFamily: "system-ui" }}>{error}</p>;
-  if (!data) return null;
-  const { graph, perNodeLocations, files } = data;
+  if (!graph) return null;
   const node = graph.nodes.find((n) => n.id === selected);
-  // Saves the mark, then adds or removes its hash here, which ticks every location with the same lines. Returns why
-  // it couldn't be saved, if it couldn't.
-  const onMark = async (view: LocationView, mark: boolean) => {
-    if (!view.hash) return "these lines can't be read, so they can't be marked";
-    const toggleHash = (s: ReadonlySet<string>) => {
-      const next = new Set(s);
-      if (mark) next.add(view.hash);
-      else next.delete(view.hash);
-      return next;
-    };
-    const failure = await sendMark({ hash: view.hash, reviewed: mark });
-    if (failure === undefined) setReviewed(toggleHash);
+  // Saves the mark, then records it here, which ticks every location with the same lines. Returns why it couldn't be
+  // saved, if it couldn't.
+  const onMark = async (hash: string, mark: boolean) => {
+    if (!hash) return "these lines can't be read, so they can't be marked";
+    const failure = await sendMark({ hash, reviewed: mark });
+    if (failure === undefined) setMarks((m) => new Map(m).set(hash, mark));
     return failure;
   };
   // The panel takes a share of the window, kept as the window is resized: once its edge has been dragged, the
@@ -110,9 +108,7 @@ function App() {
         <Panel
           graph={graph}
           node={node}
-          locations={perNodeLocations[node.id] ?? []}
-          files={files}
-          reviewed={reviewed}
+          marks={marks}
           onMark={onMark}
           onSelect={setSelected}
           width={width}

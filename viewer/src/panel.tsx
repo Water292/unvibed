@@ -2,7 +2,6 @@
 // to and from, and the code it points at, with a reviewed box on each
 // location.
 import { useState, type PointerEvent } from "react";
-import type { FileContents, LocationView } from "../../shared/graph-and-code.ts";
 import type { Graph, Node } from "../../shared/graph.ts";
 import { CodeView } from "./code-view.tsx";
 import { ViewType } from "./view-type.ts";
@@ -21,10 +20,8 @@ export const clampPanelWidth = (width: number, windowWidth: number) => Math.max(
 type Props = {
   graph: Graph;
   node: Node;
-  locations: LocationView[];
-  files: Record<string, FileContents>;
-  reviewed: ReadonlySet<string>;
-  onMark: (view: LocationView, reviewed: boolean) => Promise<string | undefined>;
+  marks: ReadonlyMap<string, boolean>;
+  onMark: (hash: string, reviewed: boolean) => Promise<string | undefined>;
   onSelect: (id: string | undefined) => void;
   width: number;
   onWidth: (width: number) => void;
@@ -32,12 +29,12 @@ type Props = {
   onViewType: (viewType: ViewType) => void;
 };
 
-export function Panel({ graph, node, locations, files, reviewed, onMark, onSelect, width, onWidth, viewType, onViewType }: Props) {
+export function Panel({ graph, node, marks, onMark, onSelect, width, onWidth, viewType, onViewType }: Props) {
   // The last mark that couldn't be saved: which location, and why.
   const [failure, setFailure] = useState<{ index: number; message: string }>();
-  const markAndReport = async (index: number, view: LocationView, mark: boolean) => {
+  const markAndReport = async (index: number, hash: string, mark: boolean) => {
     setFailure(undefined);
-    const message = await onMark(view, mark);
+    const message = await onMark(hash, mark);
     if (message !== undefined) setFailure({ index, message });
   };
   // While the edge is being dragged only the panel follows it; the new width
@@ -97,15 +94,14 @@ export function Panel({ graph, node, locations, files, reviewed, onMark, onSelec
         <p style={{ fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{node.text}</p>
         {links(incoming, "←")}
         {links(outgoing, "→")}
-        {locations.map((view, i) => (
+        {node.code.map((location, i) => (
           <CodeView
-            key={i}
-            location={view.location}
-            diff={view.diff}
-            file={files[view.location.path]}
+            // keyed by node too, so another node's box starts unwidened
+            key={`${node.id}:${i}`}
+            location={location}
             viewType={viewType}
-            reviewed={reviewed.has(view.hash)}
-            onReviewed={(r) => markAndReport(i, view, r)}
+            marks={marks}
+            onReviewed={(hash, r) => markAndReport(i, hash, r)}
             failure={failure?.index === i ? failure.message : undefined}
           />
         ))}

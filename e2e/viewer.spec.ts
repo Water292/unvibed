@@ -1,13 +1,9 @@
 // The viewer as a user meets it: `node src/view.ts graph.json` on a real repo, in a real browser.
 import { expect, test, type Page } from "@playwright/test";
-import { spawn, type ChildProcess } from "node:child_process";
-import { join } from "node:path";
 import { hashLines } from "../src/check.ts";
 import { clearReview, createTables } from "../src/review.ts";
 import type { Graph } from "../shared/graph.ts";
-import { tempRepo } from "../test/temp-repo.ts";
-
-const VIEW = join(import.meta.dirname, "../src/view.ts");
+import { BASE_AND_WORKING_TREE, baseAndWorkingTree, viewerOn } from "./viewer-on.ts";
 
 // app.ts at the base and at the head: the head replaces greet's line; add and version don't change.
 const BASE = 'export function greet(name: string) {\n  return "hello " + name;\n}\n\nexport function add(a: number, b: number) {\n  return a + b;\n}\n\nexport const version = 1;\n';
@@ -28,27 +24,15 @@ const graph: Graph = {
 };
 
 // A repo with the base committed and the PR's change left uncommitted, its graph, and the viewer serving them.
-let repo: ReturnType<typeof tempRepo>;
-let server: ChildProcess;
-let url: string;
-test.beforeAll(async ({}, { parallelIndex }) => {
-  repo = tempRepo();
-  const { dir, git, write } = repo;
-  write("app.ts", BASE);
-  git("add", ".");
-  git("commit", "-qm", "base");
-  write("app.ts", HEAD);
-  write("graph.json", JSON.stringify(graph));
-  process.chdir(dir); // so createTables opens this repo's database, which the viewer shares
-  createTables();
-
-  // Each Playwright worker running at the same time has its own parallelIndex, so its own port.
-  const port = 4700 + parallelIndex;
-  url = `http://127.0.0.1:${port}/`;
-  server = spawn(process.execPath, [VIEW, "graph.json", "--base", "HEAD", "--port", String(port), "--review", "e2e"], { cwd: dir, stdio: ["ignore", "ignore", "inherit"] });
-  await expect.poll(() => fetch(url).then((r) => r.ok, () => false), { timeout: 15_000 }).toBe(true);
-});
-test.afterAll(() => void server.kill());
+const viewer = viewerOn(
+  graph,
+  (repo) => {
+    baseAndWorkingTree("app.ts", BASE, HEAD)(repo);
+    process.chdir(repo.dir); // so createTables opens this repo's database, which the viewer shares
+    createTables();
+  },
+  BASE_AND_WORKING_TREE,
+);
 
 const box = (page: Page, id: string) => page.locator(`.react-flow__node[data-id="${id}"]`);
 const link = (page: Page, from: string, to: string) => page.locator(`.react-flow__edge[data-id="${from}->${to}"] path`).first();
@@ -56,7 +40,7 @@ const panel = (page: Page) => page.locator("aside");
 const handle = (page: Page) => page.getByTitle("Drag to resize");
 
 test("read a graph: hover lights a box's neighbourhood, clicking opens its panel, links walk the graph", async ({ page }) => {
-  await page.goto(url);
+  await page.goto(viewer.url);
 
   // Hovering greet keeps it, its link and add lit; version fades.
   await box(page, "greet").hover();
@@ -101,7 +85,7 @@ test("read a graph: hover lights a box's neighbourhood, clicking opens its panel
 
 test("dark mode: the canvas, the panel and the code follow the system", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
-  await page.goto(url);
+  await page.goto(viewer.url);
   await box(page, "greet").click();
   await expect(panel(page)).toContainText('return "hi " + name;');
   const brightness = (selector: string) =>
@@ -119,7 +103,7 @@ test("dark mode: the canvas, the panel and the code follow the system", async ({
 });
 
 test("the diff view and the panel's width survive a reload", async ({ page }) => {
-  await page.goto(url);
+  await page.goto(viewer.url);
   await box(page, "greet").click();
 
   // Split shows base and head as two columns.
@@ -149,7 +133,7 @@ test("the diff view and the panel's width survive a reload", async ({ page }) =>
 });
 
 test("the panel keeps its share of the window as the window is resized, and stops short of the window's edge", async ({ page }) => {
-  await page.goto(url);
+  await page.goto(viewer.url);
   await box(page, "greet").click();
 
   // Half of a 1200-pixel window.
@@ -178,14 +162,14 @@ test("the panel keeps its share of the window as the window is resized, and stop
 test.describe("marking code reviewed", () => {
   // Put everything back for the tests that follow.
   test.afterEach(() => {
-    repo.write("app.ts", HEAD);
+    viewer.repo.write("app.ts", HEAD);
     clearReview("e2e");
   });
 
   const getReviewedCheckbox = (page: Page) => panel(page).getByRole("checkbox", { name: "reviewed" });
   /** Loads the page, opens a box's panel, and waits until the panel contains expectedText. */
   const openBox = async (page: Page, id: string, expectedText: string) => {
-    await page.goto(url);
+    await page.goto(viewer.url);
     await box(page, id).click();
     await expect(panel(page)).toContainText(expectedText);
   };
@@ -210,7 +194,7 @@ test.describe("marking code reviewed", () => {
   test("ticking code that changed after the page showed it marks the lines on screen", async ({ page }) => {
     await openBox(page, "greet", greetLineInPr);
     // Saved while the page still shows the old line.
-    repo.write("app.ts", appWithEditedGreet);
+    viewer.repo.write("app.ts", appWithEditedGreet);
     await getReviewedCheckbox(page).click();
     await expect(getReviewedCheckbox(page)).toBeChecked();
 
@@ -218,7 +202,7 @@ test.describe("marking code reviewed", () => {
     await openBox(page, "greet", editedGreetLine);
     await expect(getReviewedCheckbox(page)).not.toBeChecked();
 
-    repo.write("app.ts", HEAD);
+    viewer.repo.write("app.ts", HEAD);
     await openBox(page, "greet", greetLineInPr);
     await expect(getReviewedCheckbox(page)).toBeChecked();
   });

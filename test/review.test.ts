@@ -2,10 +2,10 @@ import { spawnSync } from "node:child_process";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
-import { codeFor } from "../src/hunks.ts";
+import { cutFor } from "../src/hunks.ts";
 import { gitWithInput } from "../src/git.ts";
 import { MarkRequest } from "../shared/graph-and-code.ts";
-import { createTables, currentBranch, mark, readReview } from "../src/review.ts";
+import { createTables, currentBranch, isReviewed, mark } from "../src/review.ts";
 import type { Location } from "../shared/graph.ts";
 import { tempRepo } from "./temp-repo.ts";
 
@@ -52,8 +52,8 @@ const createLocation = (firstLine: number, lastLine: number, path = "f.ts", side
 
 /** What the page gets for a location, against a base: its hash, and whether it's reviewed. */
 function getLocationView(loc: Location, from = base) {
-  const { hash } = codeFor(from, undefined).createLocationView(loc);
-  return { hash, reviewed: readReview(REVIEW).includes(hash) };
+  const { hash } = cutFor(loc.path, loc.side, loc.start_line ?? loc.line, loc.line, 0, 0, from, undefined);
+  return { hash, reviewed: isReviewed(REVIEW, hash) };
 }
 
 /** Ticks a location as the page does, by its hash. */
@@ -96,7 +96,6 @@ test("unmarking a location makes it unreviewed again", () => {
   tick(createLocation(4, 5));
   tick(createLocation(4, 5), false);
   expect(getLocationView(createLocation(4, 5)).reviewed).toBe(false);
-  expect(readReview(REVIEW)).toEqual([]);
 });
 
 test("a tick on code that changed after it was shown marks only what was shown", () => {
@@ -117,6 +116,14 @@ test("base-side code (deleted lines) and files git doesn't track yet can be mark
   expect(getLocationView(createLocation(1, 1, "new.ts")).reviewed).toBe(true);
 });
 
+test("widening a location with ↑ / ↓ keeps its hash, so its mark holds", () => {
+  writeLines("f.ts", ["A", "b", "c", "d", "e"]); // the PR also changes line 1, which widening reaches
+  const { hash } = getLocationView(createLocation(4, 5));
+  const widened = cutFor("f.ts", "RIGHT", 4, 5, 20, 20, base, undefined);
+  expect(widened.diff).toContain("+A"); // the other change is in the widened code
+  expect(widened.hash).toBe(hash);
+});
+
 test("lines that can't be read have no hash, so nothing can be marked for them", () => {
   expect(getLocationView(createLocation(9, 9)).hash).toBe("");
   expect(getLocationView(createLocation(1, 1, "missing.ts")).hash).toBe("");
@@ -125,7 +132,7 @@ test("lines that can't be read have no hash, so nothing can be marked for them",
 test("reviews are kept apart: a mark in one doesn't count in another", () => {
   tick(createLocation(4, 5));
   const { hash } = getLocationView(createLocation(4, 5));
-  expect(readReview("other")).not.toContain(hash);
+  expect(isReviewed("other", hash)).toBe(false);
 });
 
 test("a review is named after the current branch", () => {

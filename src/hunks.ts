@@ -1,11 +1,10 @@
-// The code each node points at, as one small unified diff per location, for
-// the viewer's side panel, in the plain format any diff renderer reads, plus
-// the files those locations point into, whole, which the renderer draws lines
-// from. Runs in Node (view.ts).
+// One location's code at a time, as a small unified diff, for a code box in
+// the viewer's side panel, in the plain format any diff renderer reads, with
+// the hash marks are made by. Runs in Node (view.ts).
 import gitdiffModule, { type Change } from "gitdiff-parser";
 import { hashLines, splitLines } from "./check.ts";
 import { git, gitWithInput, show } from "./git.ts";
-import type { FileContents, LocationView } from "../shared/graph-and-code.ts";
+import type { CodeCut } from "../shared/graph-and-code.ts";
 import type { Location } from "../shared/graph.ts";
 
 /**
@@ -41,10 +40,14 @@ export const CONTEXT = 3;
  * CONTEXT unchanged lines before and after. Lines only on the other side are
  * kept where they sit next to lines in range, so a head range shows what it
  * replaced and a base range shows what replaced it.
+ * above / below widen the range by that many lines; a widened edge that lands
+ * inside a change goes on to the end of the change before the unchanged lines.
  */
-export function hunkIn(changes: Change[], side: Location["side"], start: number, end: number): Change[] {
+export function hunkIn(changes: Change[], side: Location["side"], start: number, end: number, above = 0, below = 0): Change[] {
   // a change's line number on the location's side; -1 if the line isn't on that side
   const line = side === "LEFT" ? oldLine : newLine;
+  start -= above;
+  end += below;
   let first = changes.findIndex((c) => line(c) >= start);
   if (first < 0) first = changes.length;
   // a diff lists what was replaced just before its replacement
@@ -54,6 +57,9 @@ export function hunkIn(changes: Change[], side: Location["side"], start: number,
   // drop other-side lines trailing after the last line in range
   while (last >= first && line(changes[last]!) < 0) last--;
   if (last < first) return [];
+  // a widened edge never cuts a change in half
+  if (above) while (first > 0 && changes[first - 1]!.type !== "normal") first--;
+  if (below) while (last + 1 < changes.length && changes[last + 1]!.type !== "normal") last++;
   // unchanged lines around them; a renderer lines up the two sides from these
   for (let n = 0; n < CONTEXT && first > 0 && changes[first - 1]!.type === "normal"; n++) first--;
   for (let n = 0; n < CONTEXT && last + 1 < changes.length && changes[last + 1]!.type === "normal"; n++) last++;
@@ -79,25 +85,23 @@ export function diffText(path: string, changes: Change[]): string {
 }
 
 /**
- * What the page shows of each location: createLocationView gives its diff (empty if the file isn't there on its side)
- * and the hash a mark is made by (empty if there's nothing in its range); files has every file read, whole. Each file
- * is read once, and every location's diff and hash come from that one read.
+ * Lines start..end of path on side, widened by above / below lines, read now: from git at a commit, from disk for
+ * the working tree. The caller checks that path is a file in the repo (isRepoFile).
  */
-export function codeFor(base: string, head: string | undefined) {
-  const files: Record<string, FileContents> = {};
-  const changes = new Map<string, Change[]>();
-  const read = (path: string) => (files[path] ??= { old: show(base, path), new: show(head, path) });
-  const createLocationView = (location: Location): LocationView => {
-    const file = read(location.path);
-    if ((location.side === "LEFT" ? file.old : file.new) === undefined) return { location, diff: "", hash: "" };
-    if (!changes.has(location.path)) changes.set(location.path, getChanges(file.old, file.new));
-    const start = location.start_line ?? location.line;
-    const hunk = hunkIn(changes.get(location.path)!, location.side, start, location.line);
-    // The hash covers the location's own rows, removed lines included, and not the unchanged lines around them or any
-    // line numbers: the same lines, changed the same way, keep their mark wherever they move.
-    const line = location.side === "LEFT" ? oldLine : newLine;
-    const own = hunk.filter((c) => c.type !== "normal" || (line(c) >= start && line(c) <= location.line));
-    return { location, diff: diffText(location.path, hunk), hash: own.length ? hashLines(own.map(toDiffLine)) : "" };
+export function cutFor(path: string, side: Location["side"], start: number, end: number, above: number, below: number, base: string, head: string | undefined): CodeCut {
+  const before = show(base, path);
+  const after = show(head, path);
+  if ((side === "LEFT" ? before : after) === undefined) return { diff: "", moreAbove: false, moreBelow: false, hash: "" };
+  const changes = getChanges(before, after);
+  // The hash covers the location's own rows, removed lines included, and not the unchanged lines around them, any
+  // line numbers, or lines it was widened by: the same lines, changed the same way, keep their mark wherever they move.
+  const line = side === "LEFT" ? oldLine : newLine;
+  const own = hunkIn(changes, side, start, end).filter((c) => c.type !== "normal" || (line(c) >= start && line(c) <= end));
+  const cut = hunkIn(changes, side, start, end, above, below);
+  return {
+    diff: diffText(path, cut),
+    moreAbove: cut.length > 0 && cut[0] !== changes[0],
+    moreBelow: cut.length > 0 && cut.at(-1) !== changes.at(-1),
+    hash: own.length ? hashLines(own.map(toDiffLine)) : "",
   };
-  return { createLocationView, files };
 }
