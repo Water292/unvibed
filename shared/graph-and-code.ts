@@ -1,14 +1,14 @@
 import { z } from "zod";
 
-/** A whole number written in decimal digits; Number() alone would also take "", "0x10", "1e3" and "+3". */
-const whole = z.string().regex(/^\d+$/, "must be a whole number").transform(Number);
+/** A query value that's a count of lines. */
+const whole = z.coerce.number().int().min(0);
 
 /** What a /code request holds: which lines of which file, on which side, and how far to widen them. */
 export const CodeQuery = z
   .object({
     path: z.string().min(1),
     side: z.enum(["LEFT", "RIGHT"]),
-    start: whole.pipe(z.number().min(1)),
+    start: whole.min(1),
     end: whole,
     above: whole.default(0),
     below: whole.default(0),
