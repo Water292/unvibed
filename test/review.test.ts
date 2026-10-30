@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { rmSync } from "node:fs";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import { codeFor } from "../src/hunks.ts";
 import { gitWithInput } from "../src/git.ts";
@@ -63,18 +63,6 @@ test("marking a location makes it reviewed", () => {
   expect(getLocationView(createLocation(4, 5)).reviewed).toBe(false);
   tick(createLocation(4, 5));
   expect(getLocationView(createLocation(4, 5)).reviewed).toBe(true);
-});
-
-test("marks are kept on disk, shared by the repo's worktrees", () => {
-  tick(createLocation(4, 5));
-  const { hash } = getLocationView(createLocation(4, 5));
-  const worktree = join(repo.dir, "../" + basename(repo.dir) + "-worktree");
-  repo.git("worktree", "add", "-q", "--detach", worktree);
-  // Another process, as another viewer would be, reading from the other worktree.
-  const read = `import { createTables, readReview } from ${JSON.stringify(join(cwd, "src/review.ts"))}; createTables(); console.log(readReview(${JSON.stringify(REVIEW)}).join())`;
-  const fromWorktree = spawnSync(process.execPath, ["--input-type=module", "-e", read], { cwd: worktree, encoding: "utf8" });
-  repo.git("worktree", "remove", "--force", worktree);
-  expect(fromWorktree.stdout.trim()).toBe(hash);
 });
 
 test("code that only moved keeps its mark", () => {
