@@ -4,6 +4,7 @@
 import gitdiffModule, { type Change } from "gitdiff-parser";
 import { hashLines, splitLines } from "./check.ts";
 import { git, gitWithInput, show } from "./git.ts";
+import { isReviewed } from "./review.ts";
 import type { CodeCut } from "../shared/graph-and-code.ts";
 import type { Location } from "../shared/graph.ts";
 
@@ -84,24 +85,30 @@ export function diffText(path: string, changes: Change[]): string {
   ].join("\n") + "\n"; // every line ends in a newline, the last one too, as in git's own diffs
 }
 
+/** What a location shows when its file can't be read on its side. */
+export const EMPTY_CUT: CodeCut = { diff: "", moreAbove: false, moreBelow: false, hash: "", reviewed: false };
+
 /**
  * Lines start..end of path on side, widened by above / below lines, read now: from git at a commit, from disk for
- * the working tree. The caller checks that path is a file in the repo (isRepoFile).
+ * the working tree, and whether they're marked reviewed in review. The caller checks that path is a file in the repo
+ * (isRepoFile).
  */
-export function cutFor(path: string, side: Location["side"], start: number, end: number, above: number, below: number, base: string, head: string | undefined): CodeCut {
+export function cutFor(path: string, side: Location["side"], start: number, end: number, above: number, below: number, base: string, head: string | undefined, review: string): CodeCut {
   const before = show(base, path);
   const after = show(head, path);
-  if ((side === "LEFT" ? before : after) === undefined) return { diff: "", moreAbove: false, moreBelow: false, hash: "" };
+  if ((side === "LEFT" ? before : after) === undefined) return EMPTY_CUT;
   const changes = getChanges(before, after);
   // The hash covers the location's own rows, removed lines included, and not the unchanged lines around them, any
   // line numbers, or lines it was widened by: the same lines, changed the same way, keep their mark wherever they move.
   const line = side === "LEFT" ? oldLine : newLine;
   const own = hunkIn(changes, side, start, end).filter((c) => c.type !== "normal" || (line(c) >= start && line(c) <= end));
   const cut = hunkIn(changes, side, start, end, above, below);
+  const hash = own.length ? hashLines(own.map(toDiffLine)) : "";
   return {
     diff: diffText(path, cut),
     moreAbove: cut.length > 0 && cut[0] !== changes[0],
     moreBelow: cut.length > 0 && cut.at(-1) !== changes.at(-1),
-    hash: own.length ? hashLines(own.map(toDiffLine)) : "",
+    hash,
+    reviewed: isReviewed(review, hash),
   };
 }

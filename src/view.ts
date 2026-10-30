@@ -20,10 +20,10 @@ import { parseArgs } from "node:util";
 import { createServer, type Plugin } from "vite";
 import { defaultBase, isRepoFile } from "./git.ts";
 import type { Graph } from "../shared/graph.ts";
-import { cutFor } from "./hunks.ts";
-import { createTables, currentBranch, isBranch, isReviewed, mark } from "./review.ts";
+import { cutFor, EMPTY_CUT } from "./hunks.ts";
+import { createTables, currentBranch, isBranch, mark } from "./review.ts";
 import { z } from "zod";
-import { CodeQuery, MarkRequest, type LocationCode } from "../shared/graph-and-code.ts";
+import { CodeQuery, MarkRequest } from "../shared/graph-and-code.ts";
 
 const usage = "usage: node src/view.ts <graph.json> [--base <rev>] [--head <rev>] [--port <n>] [--review <name>]";
 let args;
@@ -103,11 +103,10 @@ const serveGraph: Plugin = {
       try {
         // only a file in the repo on that side is read; for anything else, an empty cut, as for a file that can't be read
         const cut = isRepoFile(side === "LEFT" ? base : head, file)
-          ? cutFor(file, side, start, end, above, below, base, head)
-          : { diff: "", moreAbove: false, moreBelow: false, hash: "" };
-        const answer: LocationCode = { ...cut, reviewed: isReviewed(review, cut.hash) };
+          ? cutFor(file, side, start, end, above, below, base, head, review)
+          : EMPTY_CUT;
         res.setHeader("content-type", "application/json");
-        res.end(JSON.stringify(answer));
+        res.end(JSON.stringify(cut));
       } catch (e) {
         res.statusCode = 500;
         res.end(`can't read the code: ${(e as Error).message}`);

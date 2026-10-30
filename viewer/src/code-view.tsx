@@ -6,7 +6,7 @@ import { DiffModeEnum, DiffView } from "@git-diff-view/react";
 import "@git-diff-view/react/styles/diff-view-pure.css";
 import { useEffect, useState } from "react";
 import "./code-view.css";
-import type { LocationCode } from "../../shared/graph-and-code.ts";
+import type { CodeCut } from "../../shared/graph-and-code.ts";
 import type { Location } from "../../shared/graph.ts";
 import { ViewType } from "./view-type.ts";
 
@@ -29,7 +29,7 @@ function useDarkMode() {
 }
 
 /** A location's lines, with above / below more lines, from the server. */
-async function fetchCut(l: Location, above: number, below: number): Promise<LocationCode> {
+async function fetchCut(l: Location, above: number, below: number): Promise<CodeCut> {
   const q = new URLSearchParams({
     path: l.path,
     side: l.side,
@@ -61,7 +61,7 @@ export function CodeView({ location: l, viewType, marks, onReviewed, failure }: 
   const dark = useDarkMode();
   const [above, setAbove] = useState(0);
   const [below, setBelow] = useState(0);
-  const [cut, setCut] = useState<LocationCode>();
+  const [cut, setCut] = useState<CodeCut>();
   const [error, setError] = useState<string>();
   useEffect(() => {
     let current = true; // a newer request replaces this one's answer

@@ -16,14 +16,12 @@ export const CodeQuery = z
   .refine((q) => q.end >= q.start, { message: "end must be at least start", path: ["end"] });
 
 /**
- * One location's code: its lines as unified diff text (empty when the file can't be read on the location's side),
- * whether the file has lines beyond them, above and below, and the hash of the location's own rows (empty if there's
- * nothing in its range), which marks are made by. Widening never changes the hash.
+ * One location's code, as /code answers: its lines as unified diff text (empty when the file can't be read on the
+ * location's side), whether the file has lines beyond them, above and below, the hash of the location's own rows
+ * (empty if there's nothing in its range), which marks are made by, and whether those rows are marked reviewed.
+ * Widening never changes the hash.
  */
-export type CodeCut = { diff: string; moreAbove: boolean; moreBelow: boolean; hash: string };
-
-/** What /code answers: the cut, and whether its lines are marked reviewed. */
-export type LocationCode = CodeCut & { reviewed: boolean };
+export type CodeCut = { diff: string; moreAbove: boolean; moreBelow: boolean; hash: string; reviewed: boolean };
 
 /** Marks the lines with this hash reviewed, or not. The server checks each request against it. */
 export const MarkRequest = z.object({ hash: z.string().min(1), reviewed: z.boolean() });

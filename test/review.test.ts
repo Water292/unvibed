@@ -52,8 +52,7 @@ const createLocation = (firstLine: number, lastLine: number, path = "f.ts", side
 
 /** What the page gets for a location, against a base: its hash, and whether it's reviewed. */
 function getLocationView(loc: Location, from = base) {
-  const { hash } = cutFor(loc.path, loc.side, loc.start_line ?? loc.line, loc.line, 0, 0, from, undefined);
-  return { hash, reviewed: isReviewed(REVIEW, hash) };
+  return cutFor(loc.path, loc.side, loc.start_line ?? loc.line, loc.line, 0, 0, from, undefined, REVIEW);
 }
 
 /** Ticks a location as the page does, by its hash. */
@@ -119,7 +118,7 @@ test("base-side code (deleted lines) and files git doesn't track yet can be mark
 test("widening a location with ↑ / ↓ keeps its hash, so its mark holds", () => {
   writeLines("f.ts", ["A", "b", "c", "d", "e"]); // the PR also changes line 1, which widening reaches
   const { hash } = getLocationView(createLocation(4, 5));
-  const widened = cutFor("f.ts", "RIGHT", 4, 5, 20, 20, base, undefined);
+  const widened = cutFor("f.ts", "RIGHT", 4, 5, 20, 20, base, undefined, REVIEW);
   expect(widened.diff).toContain("+A"); // the other change is in the widened code
   expect(widened.hash).toBe(hash);
 });
