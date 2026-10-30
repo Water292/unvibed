@@ -1,0 +1,39 @@
+diff --git a/node_modules/@git-diff-view/core/dist/cjs/index.development.js b/node_modules/@git-diff-view/core/dist/cjs/index.development.js
+index 4f1bb07..1ec662f 100644
+--- a/node_modules/@git-diff-view/core/dist/cjs/index.development.js
++++ b/node_modules/@git-diff-view/core/dist/cjs/index.development.js
+@@ -2853,7 +2853,7 @@ _DiffFile_oldFileResult = new WeakMap(), _DiffFile_newFileResult = new WeakMap()
+                 hasSymbolChanged = hasSymbolChanged || oldDiffLine.noTrailingNewLine !== newDiffLine.noTrailingNewLine;
+             }
+         }
+-        if (!hasSymbolChanged && oldFileContent === newFileContent) {
++        if (!hasSymbolChanged && oldFileContent === newFileContent && !this.diffLineLength) {
+             {
+                 console.warn("[@git-diff-view/core] The composed `oldFileContent` and `newFileContent` are identical. This might indicate an invalid `diff` string.");
+             }
+diff --git a/node_modules/@git-diff-view/core/dist/cjs/index.production.js b/node_modules/@git-diff-view/core/dist/cjs/index.production.js
+index d1bfa1b..4fc8e08 100644
+--- a/node_modules/@git-diff-view/core/dist/cjs/index.production.js
++++ b/node_modules/@git-diff-view/core/dist/cjs/index.production.js
+@@ -2766,7 +2766,7 @@ _DiffFile_oldFileResult = new WeakMap(), _DiffFile_newFileResult = new WeakMap()
+                 hasSymbolChanged = hasSymbolChanged || oldDiffLine.noTrailingNewLine !== newDiffLine.noTrailingNewLine;
+             }
+         }
+-        if (!hasSymbolChanged && oldFileContent === newFileContent) {
++        if (!hasSymbolChanged && oldFileContent === newFileContent && !this.diffLineLength) {
+             return;
+         }
+         this._oldFileContent = oldFileContent;
+diff --git a/node_modules/@git-diff-view/core/dist/esm/index.mjs b/node_modules/@git-diff-view/core/dist/esm/index.mjs
+index d2bb01b..bab13c0 100644
+--- a/node_modules/@git-diff-view/core/dist/esm/index.mjs
++++ b/node_modules/@git-diff-view/core/dist/esm/index.mjs
+@@ -2852,7 +2852,7 @@ _DiffFile_oldFileResult = new WeakMap(), _DiffFile_newFileResult = new WeakMap()
+                 hasSymbolChanged = hasSymbolChanged || oldDiffLine.noTrailingNewLine !== newDiffLine.noTrailingNewLine;
+             }
+         }
+-        if (!hasSymbolChanged && oldFileContent === newFileContent) {
++        if (!hasSymbolChanged && oldFileContent === newFileContent && !this.diffLineLength) {
+             if (process.env.NODE_ENV === "development") {
+                 console.warn("[@git-diff-view/core] The composed `oldFileContent` and `newFileContent` are identical. This might indicate an invalid `diff` string.");
+             }

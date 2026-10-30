@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { lstatSync, readFileSync } from "node:fs";
 
 export const git = (...args: string[]) =>
   execFileSync("git", args, { encoding: "utf8", maxBuffer: 1 << 28, stdio: ["ignore", "pipe", "ignore"] });
@@ -15,6 +15,22 @@ export function show(rev: string | undefined, path: string): string | undefined 
     return readFileSync(`${git("rev-parse", "--show-toplevel").trim()}/${path}`, "utf8");
   } catch {
     return undefined;
+  }
+}
+
+/**
+ * Whether path, from the repo's top, names a file in the repo: at a commit, a file in its tree; on disk (no
+ * commit), a file git lists, tracked or untracked but not ignored, that isn't a symlink, which reading would
+ * follow out of the repo. Anything else (outside the repo, ignored, in .git, a folder) is not.
+ */
+export function isRepoFile(rev: string | undefined, path: string): boolean {
+  try {
+    if (rev) return git("cat-file", "-t", `${rev}:${path}`).trim() === "blob";
+    const listed = git("ls-files", "-z", "--full-name", "--cached", "--others", "--exclude-standard", "--", `:(top,literal)${path}`);
+    // exactly this one file: a folder would list the files in it
+    return listed === `${path}\0` && !lstatSync(`${git("rev-parse", "--show-toplevel").trim()}/${path}`).isSymbolicLink();
+  } catch {
+    return false;
   }
 }
 

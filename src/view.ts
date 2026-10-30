@@ -3,15 +3,14 @@
 //   node src/view.ts <graph.json> [--base <rev>] [--head <rev>] [--port <n>] [--review <name>]
 //
 // Starts Vite's development server (hot reload included) and answers
-// /graph.json with the chosen file, which can be anywhere on disk, together
-// with the code each node points at, diffed between --base (default:
-// merge-base of origin/main and HEAD) and --head (default: the working tree),
-// the files that code is in, whole, so the renderer can draw and expand lines
-// around it, and the hashes of the lines marked reviewed in this review: the
-// one --review names, else the branch --head names, else the branch checked
-// out at startup. Without --head the code is the working tree, so if another
-// branch is checked out later, requests are refused until it's back. POST
-// /mark records a mark.
+// /graph.json with the chosen file, which can be anywhere on disk.
+// /code?path=&side=&start=&end=[&above=&below=] answers with those lines of a
+// file in the repo, diffed between --base (default: merge-base of origin/main
+// and HEAD) and --head (default: the working tree), read when asked, and
+// whether they're marked reviewed in this review: the one --review names,
+// else the branch --head names, else the branch checked out at startup.
+// Without --head the code is the working tree, so if another branch is checked
+// out later, requests are refused until it's back. POST /mark records a mark.
 // The page gets nothing else from disk. It listens on --port, failing if
 // that's taken; without it, on the first free port from 4620.
 import { readFileSync } from "node:fs";
@@ -19,12 +18,12 @@ import { resolve } from "node:path";
 import { text } from "node:stream/consumers";
 import { parseArgs } from "node:util";
 import { createServer, type Plugin } from "vite";
-import { defaultBase } from "./git.ts";
+import { defaultBase, isRepoFile } from "./git.ts";
 import type { Graph } from "../shared/graph.ts";
-import { codeFor } from "./hunks.ts";
-import { createTables, currentBranch, isBranch, mark, readReview } from "./review.ts";
+import { cutFor, EMPTY_CUT } from "./hunks.ts";
+import { createTables, currentBranch, isBranch, mark } from "./review.ts";
 import { z } from "zod";
-import { MarkRequest, type GraphAndCode } from "../shared/graph-and-code.ts";
+import { CodeQuery, MarkRequest } from "../shared/graph-and-code.ts";
 
 const usage = "usage: node src/view.ts <graph.json> [--base <rev>] [--head <rev>] [--port <n>] [--review <name>]";
 let args;
@@ -84,13 +83,30 @@ const serveGraph: Plugin = {
         res.end(`can't read ${path}`);
         return;
       }
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify(graph));
+    });
+    server.middlewares.use("/code", (req, res) => {
+      const branchChange = describeBranchChange();
+      if (branchChange) {
+        res.statusCode = 409;
+        res.end(branchChange);
+        return;
+      }
+      const query = CodeQuery.safeParse(Object.fromEntries(new URL(req.url ?? "", `http://${req.headers.host}`).searchParams));
+      if (!query.success) {
+        res.statusCode = 400;
+        res.end(z.prettifyError(query.error));
+        return;
+      }
+      const { path: file, side, start, end, above, below } = query.data;
       try {
-        const code = codeFor(base, head);
-        const perNodeLocations = Object.fromEntries(graph.nodes.map((n) => [n.id, n.code.map(code.createLocationView)]));
-        const reviewed = readReview(review);
-        const answer: GraphAndCode = { graph, perNodeLocations, files: code.files, reviewed };
+        // only a file in the repo on that side is read; for anything else, an empty cut, as for a file that can't be read
+        const cut = isRepoFile(side === "LEFT" ? base : head, file)
+          ? cutFor(file, side, start, end, above, below, base, head, review)
+          : EMPTY_CUT;
         res.setHeader("content-type", "application/json");
-        res.end(JSON.stringify(answer));
+        res.end(JSON.stringify(cut));
       } catch (e) {
         res.statusCode = 500;
         res.end(`can't read the code: ${(e as Error).message}`);

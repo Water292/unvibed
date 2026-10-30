@@ -1,13 +1,10 @@
 // The viewer as a user meets it: `node src/view.ts graph.json` on a real repo, in a real browser.
 import { expect, test, type Page } from "@playwright/test";
-import { spawn, type ChildProcess } from "node:child_process";
-import { join } from "node:path";
 import { hashLines } from "../src/check.ts";
 import { clearReview, createTables } from "../src/review.ts";
 import type { Graph } from "../shared/graph.ts";
 import { tempRepo } from "../test/temp-repo.ts";
-
-const VIEW = join(import.meta.dirname, "../src/view.ts");
+import { startViewer } from "./start-viewer.ts";
 
 // app.ts at the base and at the head: the head replaces greet's line; add and version don't change.
 const BASE = 'export function greet(name: string) {\n  return "hello " + name;\n}\n\nexport function add(a: number, b: number) {\n  return a + b;\n}\n\nexport const version = 1;\n';
@@ -29,26 +26,20 @@ const graph: Graph = {
 
 // A repo with the base committed and the PR's change left uncommitted, its graph, and the viewer serving them.
 let repo: ReturnType<typeof tempRepo>;
-let server: ChildProcess;
-let url: string;
+let viewer: Awaited<ReturnType<typeof startViewer>>;
 test.beforeAll(async ({}, { parallelIndex }) => {
   repo = tempRepo();
-  const { dir, git, write } = repo;
-  write("app.ts", BASE);
-  git("add", ".");
-  git("commit", "-qm", "base");
-  write("app.ts", HEAD);
-  write("graph.json", JSON.stringify(graph));
-  process.chdir(dir); // so createTables opens this repo's database, which the viewer shares
+  repo.write("app.ts", BASE);
+  repo.git("add", ".");
+  repo.git("commit", "-qm", "base");
+  repo.write("app.ts", HEAD);
+  repo.write("graph.json", JSON.stringify(graph));
+  process.chdir(repo.dir); // so createTables opens this repo's database, which the viewer shares
   createTables();
-
   // Each Playwright worker running at the same time has its own parallelIndex, so its own port.
-  const port = 4700 + parallelIndex;
-  url = `http://127.0.0.1:${port}/`;
-  server = spawn(process.execPath, [VIEW, "graph.json", "--base", "HEAD", "--port", String(port), "--review", "e2e"], { cwd: dir, stdio: ["ignore", "ignore", "inherit"] });
-  await expect.poll(() => fetch(url).then((r) => r.ok, () => false), { timeout: 15_000 }).toBe(true);
+  viewer = await startViewer(repo.dir, 4700 + parallelIndex, ["--base", "HEAD"]);
 });
-test.afterAll(() => void server.kill());
+test.afterAll(() => viewer.stop());
 
 const box = (page: Page, id: string) => page.locator(`.react-flow__node[data-id="${id}"]`);
 const link = (page: Page, from: string, to: string) => page.locator(`.react-flow__edge[data-id="${from}->${to}"] path`).first();
@@ -56,7 +47,7 @@ const panel = (page: Page) => page.locator("aside");
 const handle = (page: Page) => page.getByTitle("Drag to resize");
 
 test("read a graph: hover lights a box's neighbourhood, clicking opens its panel, links walk the graph", async ({ page }) => {
-  await page.goto(url);
+  await page.goto(viewer.url);
 
   // Hovering greet keeps it, its link and add lit; version fades.
   await box(page, "greet").hover();
@@ -101,7 +92,7 @@ test("read a graph: hover lights a box's neighbourhood, clicking opens its panel
 
 test("dark mode: the canvas, the panel and the code follow the system", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
-  await page.goto(url);
+  await page.goto(viewer.url);
   await box(page, "greet").click();
   await expect(panel(page)).toContainText('return "hi " + name;');
   const brightness = (selector: string) =>
@@ -119,7 +110,7 @@ test("dark mode: the canvas, the panel and the code follow the system", async ({
 });
 
 test("the diff view and the panel's width survive a reload", async ({ page }) => {
-  await page.goto(url);
+  await page.goto(viewer.url);
   await box(page, "greet").click();
 
   // Split shows base and head as two columns.
@@ -149,7 +140,7 @@ test("the diff view and the panel's width survive a reload", async ({ page }) =>
 });
 
 test("the panel keeps its share of the window as the window is resized, and stops short of the window's edge", async ({ page }) => {
-  await page.goto(url);
+  await page.goto(viewer.url);
   await box(page, "greet").click();
 
   // Half of a 1200-pixel window.
@@ -185,7 +176,7 @@ test.describe("marking code reviewed", () => {
   const getReviewedCheckbox = (page: Page) => panel(page).getByRole("checkbox", { name: "reviewed" });
   /** Loads the page, opens a box's panel, and waits until the panel contains expectedText. */
   const openBox = async (page: Page, id: string, expectedText: string) => {
-    await page.goto(url);
+    await page.goto(viewer.url);
     await box(page, id).click();
     await expect(panel(page)).toContainText(expectedText);
   };

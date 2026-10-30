@@ -1,6 +1,6 @@
 // Review state: the hashes of the code marked reviewed, each the hash of a
 // location's own rows of the diff, removed lines included, without line
-// numbers (see codeFor). A location is reviewed when its hash is one of them,
+// numbers (see cutFor). A location is reviewed when its hash is one of them,
 // so moved code stays reviewed, and changed or re-cut code, or code whose
 // base changed, doesn't.
 //
@@ -47,10 +47,9 @@ export const isBranch = (name: string) => {
   }
 };
 
-/** The hashes marked reviewed in a review. */
-export function readReview(review: string): string[] {
-  const rows = db.prepare("SELECT hash FROM reviewed WHERE review = ?").all(review);
-  return rows.map((row) => row.hash as string);
+/** Whether the lines with this hash are marked reviewed in a review. */
+export function isReviewed(review: string, hash: string): boolean {
+  return db.prepare("SELECT 1 FROM reviewed WHERE review = ? AND hash = ?").get(review, hash) !== undefined;
 }
 
 /** Marks the lines with this hash reviewed, or not, in a review. */
