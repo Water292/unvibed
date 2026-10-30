@@ -2,7 +2,8 @@
 import { expect, test } from "@playwright/test";
 import { hashLines } from "../src/check.ts";
 import type { Graph } from "../shared/graph.ts";
-import { BASE_AND_WORKING_TREE, baseAndWorkingTree, serveGraphFromTempRepo } from "./serve-graph-from-temp-repo.ts";
+import { tempRepo } from "../test/temp-repo.ts";
+import { startViewer } from "./start-viewer.ts";
 
 // The same line is replaced in three places: lines 2, 5 and 8.
 const BASE = "a\nold\nb\nc\nold\nd\ne\nold\nf\n";
@@ -18,13 +19,23 @@ const graph: Graph = {
   edges: [],
 };
 
-const served = serveGraphFromTempRepo(graph, baseAndWorkingTree("f.txt", BASE, HEAD), BASE_AND_WORKING_TREE);
+let viewer: Awaited<ReturnType<typeof startViewer>>;
+test.beforeAll(async ({}, { parallelIndex }) => {
+  const { dir, git, write } = tempRepo();
+  write("f.txt", BASE);
+  git("add", ".");
+  git("commit", "-qm", "base");
+  write("f.txt", HEAD);
+  write("graph.json", JSON.stringify(graph));
+  viewer = await startViewer(dir, 4730 + parallelIndex, ["--base", "HEAD"]);
+});
+test.afterAll(() => viewer.stop());
 
 test("a tick reaches every box with the same lines, in this node and others, and an untick does too", async ({ page }) => {
   const boxes = page.locator("aside").getByRole("checkbox", { name: "reviewed" });
   const open = (id: string) => page.locator(`.react-flow__node[data-id="${id}"]`).click();
 
-  await page.goto(served.url);
+  await page.goto(viewer.url);
   await open("twins");
   await expect(boxes).toHaveCount(2);
   await expect(boxes.nth(0)).not.toBeChecked();

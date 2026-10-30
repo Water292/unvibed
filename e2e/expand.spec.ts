@@ -2,7 +2,8 @@
 import { expect, test } from "@playwright/test";
 import { hashLines } from "../src/check.ts";
 import type { Graph } from "../shared/graph.ts";
-import { BASE_AND_HEAD, baseAndHead, serveGraphFromTempRepo } from "./serve-graph-from-temp-repo.ts";
+import { tempRepo } from "../test/temp-repo.ts";
+import { startViewer } from "./start-viewer.ts";
 
 // long.txt: 40 lines; the head changes line 5 and, far below, line 30.
 const lines = Array.from({ length: 40 }, (_, i) => `line ${i + 1}`);
@@ -16,10 +17,21 @@ const graph: Graph = {
   edges: [],
 };
 
-const served = serveGraphFromTempRepo(graph, baseAndHead("long.txt", BASE, HEAD), BASE_AND_HEAD);
+let viewer: Awaited<ReturnType<typeof startViewer>>;
+test.beforeAll(async ({}, { parallelIndex }) => {
+  const { dir, git, write } = tempRepo();
+  write("long.txt", BASE);
+  git("add", ".");
+  git("commit", "-qm", "base");
+  write("long.txt", HEAD);
+  git("commit", "-qam", "head");
+  write("graph.json", JSON.stringify(graph));
+  viewer = await startViewer(dir, 4720 + parallelIndex, ["--base", "HEAD~1", "--head", "HEAD"]);
+});
+test.afterAll(() => viewer.stop());
 
 test("↓ shows 20 more lines at a time, other changes as changes, until the end of the file; ↑ at the top", async ({ page }) => {
-  await page.goto(served.url);
+  await page.goto(viewer.url);
   await page.locator('.react-flow__node[data-id="five"]').click();
   const box = page.locator("aside .code-view");
   const up = box.getByRole("button", { name: "↑" });
