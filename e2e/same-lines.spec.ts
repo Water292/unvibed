@@ -2,7 +2,7 @@
 import { expect, test } from "@playwright/test";
 import { hashLines } from "../src/check.ts";
 import type { Graph } from "../shared/graph.ts";
-import { BASE_AND_WORKING_TREE, baseAndWorkingTree, viewerOn } from "./viewer-on.ts";
+import { BASE_AND_WORKING_TREE, baseAndWorkingTree, serveGraphFromTempRepo } from "./serve-graph-from-temp-repo.ts";
 
 // The same line is replaced in three places: lines 2, 5 and 8.
 const BASE = "a\nold\nb\nc\nold\nd\ne\nold\nf\n";
@@ -18,13 +18,13 @@ const graph: Graph = {
   edges: [],
 };
 
-const viewer = viewerOn(graph, baseAndWorkingTree("f.txt", BASE, HEAD), BASE_AND_WORKING_TREE);
+const served = serveGraphFromTempRepo(graph, baseAndWorkingTree("f.txt", BASE, HEAD), BASE_AND_WORKING_TREE);
 
 test("a tick reaches every box with the same lines, in this node and others, and an untick does too", async ({ page }) => {
   const boxes = page.locator("aside").getByRole("checkbox", { name: "reviewed" });
   const open = (id: string) => page.locator(`.react-flow__node[data-id="${id}"]`).click();
 
-  await page.goto(viewer.url);
+  await page.goto(served.url);
   await open("twins");
   await expect(boxes).toHaveCount(2);
   await expect(boxes.nth(0)).not.toBeChecked();

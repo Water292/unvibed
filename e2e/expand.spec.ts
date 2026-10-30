@@ -2,7 +2,7 @@
 import { expect, test } from "@playwright/test";
 import { hashLines } from "../src/check.ts";
 import type { Graph } from "../shared/graph.ts";
-import { BASE_AND_HEAD, baseAndHead, viewerOn } from "./viewer-on.ts";
+import { BASE_AND_HEAD, baseAndHead, serveGraphFromTempRepo } from "./serve-graph-from-temp-repo.ts";
 
 // long.txt: 40 lines; the head changes line 5 and, far below, line 30.
 const lines = Array.from({ length: 40 }, (_, i) => `line ${i + 1}`);
@@ -16,10 +16,10 @@ const graph: Graph = {
   edges: [],
 };
 
-const viewer = viewerOn(graph, baseAndHead("long.txt", BASE, HEAD), BASE_AND_HEAD);
+const served = serveGraphFromTempRepo(graph, baseAndHead("long.txt", BASE, HEAD), BASE_AND_HEAD);
 
 test("↓ shows 20 more lines at a time, other changes as changes, until the end of the file; ↑ at the top", async ({ page }) => {
-  await page.goto(viewer.url);
+  await page.goto(served.url);
   await page.locator('.react-flow__node[data-id="five"]').click();
   const box = page.locator("aside .code-view");
   const up = box.getByRole("button", { name: "↑" });
