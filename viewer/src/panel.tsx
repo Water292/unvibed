@@ -96,7 +96,6 @@ export function Panel({ graph, node, marks, onMark, onSelect, width, onWidth, vi
         {links(outgoing, "→")}
         {node.code.map((location, i) => (
           <CodeView
-            // keyed by node too, so another node's box starts unwidened
             key={`${node.id}:${i}`}
             location={location}
             viewType={viewType}
