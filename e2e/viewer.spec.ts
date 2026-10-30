@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
 import { join } from "node:path";
 import { hashLines } from "../src/check.ts";
+import { clearReview, createTables } from "../src/review.ts";
 import type { Graph } from "../shared/graph.ts";
 import { tempRepo } from "../test/temp-repo.ts";
 
@@ -38,6 +39,8 @@ test.beforeAll(async ({}, { parallelIndex }) => {
   git("commit", "-qm", "base");
   write("app.ts", HEAD);
   write("graph.json", JSON.stringify(graph));
+  process.chdir(dir); // so createTables opens this repo's database, which the viewer shares
+  createTables();
 
   // Each Playwright worker running at the same time has its own parallelIndex, so its own port.
   const port = 4700 + parallelIndex;
@@ -176,7 +179,7 @@ test.describe("marking code reviewed", () => {
   // Put everything back for the tests that follow.
   test.afterEach(() => {
     repo.write("app.ts", HEAD);
-    repo.git("update-ref", "-d", "refs/unvibed/reviews/e2e");
+    clearReview("e2e");
   });
 
   const getReviewedCheckbox = (page: Page) => panel(page).getByRole("checkbox", { name: "reviewed" });
@@ -198,7 +201,6 @@ test.describe("marking code reviewed", () => {
 
     await openBox(page, "greet", greetLineInPr);
     await expect(getReviewedCheckbox(page)).toBeChecked();
-    expect(repo.git("for-each-ref", "--format=%(refname)", "refs/unvibed")).toBe("refs/unvibed/reviews/e2e");
 
     await getReviewedCheckbox(page).click();
     await openBox(page, "greet", greetLineInPr);
