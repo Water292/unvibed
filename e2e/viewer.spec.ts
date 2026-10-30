@@ -1,6 +1,7 @@
 // The viewer as a user meets it: `node src/view.ts graph.json` on a real repo, in a real browser.
 import { expect, test, type Page } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { hashLines } from "../src/check.ts";
 import type { Graph } from "../shared/graph.ts";
@@ -176,7 +177,7 @@ test.describe("marking code reviewed", () => {
   // Put everything back for the tests that follow.
   test.afterEach(() => {
     repo.write("app.ts", HEAD);
-    repo.git("update-ref", "-d", "refs/unvibed/reviews/e2e");
+    rmSync(join(repo.dir, ".git/unvibed-reviews.sqlite"), { force: true });
   });
 
   const getReviewedCheckbox = (page: Page) => panel(page).getByRole("checkbox", { name: "reviewed" });
@@ -198,7 +199,6 @@ test.describe("marking code reviewed", () => {
 
     await openBox(page, "greet", greetLineInPr);
     await expect(getReviewedCheckbox(page)).toBeChecked();
-    expect(repo.git("for-each-ref", "--format=%(refname)", "refs/unvibed")).toBe("refs/unvibed/reviews/e2e");
 
     await getReviewedCheckbox(page).click();
     await openBox(page, "greet", greetLineInPr);

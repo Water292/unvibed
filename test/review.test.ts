@@ -1,11 +1,11 @@
 import { spawnSync } from "node:child_process";
 import { rmSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import { codeFor } from "../src/hunks.ts";
 import { gitWithInput } from "../src/git.ts";
 import { MarkRequest } from "../shared/graph-and-code.ts";
-import { currentBranch, isReviewName, mark, readReview } from "../src/review.ts";
+import { currentBranch, mark, readReview } from "../src/review.ts";
 import type { Location } from "../shared/graph.ts";
 import { tempRepo } from "./temp-repo.ts";
 
@@ -38,8 +38,7 @@ afterAll(() => {
 beforeEach(() => {
   writeLines("f.ts", ["a", "b", "c", "d", "e"]); // the PR adds d and e
   repo.git("clean", "-fdq");
-  const reviewRefs = repo.git("for-each-ref", "--format=%(refname)", "refs/unvibed").split("\n").filter(Boolean);
-  for (const ref of reviewRefs) repo.git("update-ref", "-d", ref);
+  rmSync(join(repo.dir, ".git/unvibed-reviews.sqlite"), { force: true });
 });
 
 const createLocation = (firstLine: number, lastLine: number, path = "f.ts", side: Location["side"] = "RIGHT"): Location => ({
@@ -53,17 +52,28 @@ const createLocation = (firstLine: number, lastLine: number, path = "f.ts", side
 /** What the page gets for a location, against a base: its hash, and whether it's reviewed. */
 function getLocationView(loc: Location, from = base) {
   const { hash } = codeFor(from, undefined).createLocationView(loc);
-  return { hash, reviewed: readReview(REVIEW).state.reviewed.includes(hash) };
+  return { hash, reviewed: readReview(REVIEW).includes(hash) };
 }
 
 /** Ticks a location as the page does, by its hash. */
 const tick = (loc: Location, reviewed = true) => mark(REVIEW, getLocationView(loc).hash, reviewed);
 
-test("marking a location makes it reviewed, kept under the review's own ref", () => {
+test("marking a location makes it reviewed", () => {
   expect(getLocationView(createLocation(4, 5)).reviewed).toBe(false);
   tick(createLocation(4, 5));
   expect(getLocationView(createLocation(4, 5)).reviewed).toBe(true);
-  expect(repo.git("for-each-ref", "--format=%(refname)", "refs/unvibed")).toBe("refs/unvibed/reviews/pr");
+});
+
+test("marks are kept on disk, shared by the repo's worktrees", () => {
+  tick(createLocation(4, 5));
+  const { hash } = getLocationView(createLocation(4, 5));
+  const worktree = join(repo.dir, "../" + basename(repo.dir) + "-worktree");
+  repo.git("worktree", "add", "-q", "--detach", worktree);
+  // Another process, as another viewer would be, reading from the other worktree.
+  const read = `import { readReview } from ${JSON.stringify(join(cwd, "src/review.ts"))}; console.log(readReview(${JSON.stringify(REVIEW)}).join())`;
+  const fromWorktree = spawnSync(process.execPath, ["--input-type=module", "-e", read], { cwd: worktree, encoding: "utf8" });
+  repo.git("worktree", "remove", "--force", worktree);
+  expect(fromWorktree.stdout.trim()).toBe(hash);
 });
 
 test("code that only moved keeps its mark", () => {
@@ -97,7 +107,7 @@ test("unmarking a location makes it unreviewed again", () => {
   tick(createLocation(4, 5));
   tick(createLocation(4, 5), false);
   expect(getLocationView(createLocation(4, 5)).reviewed).toBe(false);
-  expect(readReview(REVIEW).state.reviewed).toEqual([]);
+  expect(readReview(REVIEW)).toEqual([]);
 });
 
 test("a tick on code that changed after it was shown marks only what was shown", () => {
@@ -126,13 +136,11 @@ test("lines that can't be read have no hash, so nothing can be marked for them",
 test("reviews are kept apart: a mark in one doesn't count in another", () => {
   tick(createLocation(4, 5));
   const { hash } = getLocationView(createLocation(4, 5));
-  expect(readReview("other").state.reviewed).not.toContain(hash);
+  expect(readReview("other")).not.toContain(hash);
 });
 
-test("a review is named after the current branch, and git's rules for branch names apply", () => {
+test("a review is named after the current branch", () => {
   expect(currentBranch()).toBe(repo.git("rev-parse", "--abbrev-ref", "HEAD"));
-  expect(isReviewName("feature/x")).toBe(true);
-  expect(isReviewName("a..b")).toBe(false);
 });
 
 test("with no branch checked out, the viewer asks for a review name instead of starting", () => {

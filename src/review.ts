@@ -5,18 +5,29 @@
 // base changed, doesn't.
 //
 // Each review has its own state, usually named after the branch being
-// reviewed: a JSON blob that refs/unvibed/reviews/<name> points at. Git
-// doesn't push refs like these unless asked, and worktrees share them.
-// refs/unvibed/reviews/ holds only review refs, named like branches, so, as
-// with branches, git refuses a name that clashes with another (a and a/b).
-// Format changes go in the JSON's version.
-import { execFileSync } from "node:child_process";
-import { git, gitWithInput } from "./git.ts";
+// reviewed: the rows with its name in a SQLite database in the repo's common
+// git dir, one row per hash, so worktrees share it and git never pushes it.
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { git } from "./git.ts";
 
-export type ReviewState = { version: 1; reviewed: string[] };
-
-const refOf = (review: string) => `refs/unvibed/reviews/${review}`;
-const NO_REF = "0".repeat(40); // update-ref's "the ref must not exist yet"
+/**
+ * Runs a query on the reviews database, creating it if it doesn't exist yet. Each repo has its own file, so a row needs
+ * no repo. A mark is only its review and its hash, so the table has nothing that should change shape; there are no
+ * migrations, and an existing file is used as it is. If the shape ever has to change, whether old rows are converted
+ * or dropped is decided then.
+ */
+function withReviews<T>(query: (db: DatabaseSync) => T): T {
+  const dir = git("rev-parse", "--path-format=absolute", "--git-common-dir").trim();
+  // Waits up to 5s for another viewer's write to finish rather than failing at once.
+  const db = new DatabaseSync(join(dir, "unvibed-reviews.sqlite"), { timeout: 5000 });
+  try {
+    db.exec("CREATE TABLE IF NOT EXISTS reviewed (review TEXT NOT NULL, hash TEXT NOT NULL, PRIMARY KEY (review, hash)) WITHOUT ROWID");
+    return query(db);
+  } finally {
+    db.close();
+  }
+}
 
 /** The current branch, which names a review unless another name is given; undefined if no branch is checked out. */
 export function currentBranch(): string | undefined {
@@ -37,56 +48,15 @@ export const isBranch = (name: string) => {
   }
 };
 
-/** Whether git accepts this as a review's name. */
-export const isReviewName = (review: string) => {
-  try {
-    git("check-ref-format", refOf(review));
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-/** A review's state and the object its ref points at now (NO_REF when there's none yet). */
-export function readReview(review: string): { state: ReviewState; at: string } {
-  let at: string;
-  try {
-    at = git("rev-parse", "--verify", "-q", refOf(review)).trim();
-  } catch {
-    return { state: { version: 1, reviewed: [] }, at: NO_REF };
-  }
-  return { state: JSON.parse(git("cat-file", "blob", at)), at };
+/** The hashes marked reviewed in a review. */
+export function readReview(review: string): string[] {
+  const rows = withReviews((db) => db.prepare("SELECT hash FROM reviewed WHERE review = ?").all(review));
+  return rows.map((row) => row.hash as string);
 }
 
-/** Creates the review's ref if it doesn't exist yet; throws git's message if git refuses the name (a next to a/b). */
-export function createReview(review: string): void {
-  const { state, at } = readReview(review);
-  if (at === NO_REF) writeReview(review, state, at);
-}
-
-/**
- * Saves the state if the ref hasn't moved since it was read; false if it has (another mark landed). Other failures
- * throw git's message.
- */
-function writeReview(review: string, state: ReviewState, at: string): boolean {
-  const blob = gitWithInput(JSON.stringify(state, null, 2) + "\n", "hash-object", "-w", "--stdin").trim();
-  try {
-    execFileSync("git", ["update-ref", refOf(review), blob, at], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-    return true;
-  } catch (e) {
-    if (readReview(review).at !== at) return false;
-    throw new Error((e as { stderr?: string }).stderr?.trim() || String(e));
-  }
-}
-
-/** Marks the lines with this hash reviewed, or not, in a review; retries if another mark lands at the same time. */
+/** Marks the lines with this hash reviewed, or not, in a review. */
 export function mark(review: string, hash: string, reviewed: boolean): void {
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const { state, at } = readReview(review);
-    const hashes = new Set(state.reviewed);
-    if (reviewed) hashes.add(hash);
-    else hashes.delete(hash);
-    if (writeReview(review, { version: 1, reviewed: [...hashes] }, at)) return;
-  }
-  throw new Error("couldn't save the mark: other marks kept landing at the same time");
+  withReviews((db) =>
+    db.prepare(reviewed ? "INSERT OR IGNORE INTO reviewed (review, hash) VALUES (?, ?)" : "DELETE FROM reviewed WHERE review = ? AND hash = ?").run(review, hash),
+  );
 }

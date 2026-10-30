@@ -22,7 +22,7 @@ import { createServer, type Plugin } from "vite";
 import { defaultBase } from "./git.ts";
 import type { Graph } from "../shared/graph.ts";
 import { codeFor } from "./hunks.ts";
-import { createReview, currentBranch, isBranch, isReviewName, mark, readReview } from "./review.ts";
+import { currentBranch, isBranch, mark, readReview } from "./review.ts";
 import { z } from "zod";
 import { MarkRequest, type GraphAndCode } from "../shared/graph-and-code.ts";
 
@@ -57,16 +57,6 @@ if (review === undefined) {
   console.error(`no branch is checked out: name the review with --review <name>\n${usage}`);
   process.exit(2);
 }
-if (!isReviewName(review)) {
-  console.error(`${review} isn't a name git accepts for a branch: name the review with --review <name>\n${usage}`);
-  process.exit(2);
-}
-try {
-  createReview(review);
-} catch (e) {
-  console.error(`${(e as Error).message}\nname the review with --review <name>\n${usage}`);
-  process.exit(2);
-}
 /** Why requests are refused: the working tree is shown and another branch is checked out than at startup. */
 function describeBranchChange(): string | undefined {
   if (head !== undefined) return undefined;
@@ -96,7 +86,7 @@ const serveGraph: Plugin = {
       try {
         const code = codeFor(base, head);
         const perNodeLocations = Object.fromEntries(graph.nodes.map((n) => [n.id, n.code.map(code.createLocationView)]));
-        const { reviewed } = readReview(review).state;
+        const reviewed = readReview(review);
         const answer: GraphAndCode = { graph, perNodeLocations, files: code.files, reviewed };
         res.setHeader("content-type", "application/json");
         res.end(JSON.stringify(answer));
