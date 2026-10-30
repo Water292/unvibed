@@ -5,7 +5,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import { codeFor } from "../src/hunks.ts";
 import { gitWithInput } from "../src/git.ts";
 import { MarkRequest } from "../shared/graph-and-code.ts";
-import { currentBranch, mark, readReview } from "../src/review.ts";
+import { createTables, currentBranch, mark, readReview } from "../src/review.ts";
 import type { Location } from "../shared/graph.ts";
 import { tempRepo } from "./temp-repo.ts";
 
@@ -38,7 +38,8 @@ afterAll(() => {
 beforeEach(() => {
   writeLines("f.ts", ["a", "b", "c", "d", "e"]); // the PR adds d and e
   repo.git("clean", "-fdq");
-  rmSync(join(repo.dir, ".git/unvibed-reviews.sqlite"), { force: true });
+  rmSync(join(repo.dir, ".git/unvibed.sqlite"), { force: true });
+  createTables();
 });
 
 const createLocation = (firstLine: number, lastLine: number, path = "f.ts", side: Location["side"] = "RIGHT"): Location => ({
@@ -70,7 +71,7 @@ test("marks are kept on disk, shared by the repo's worktrees", () => {
   const worktree = join(repo.dir, "../" + basename(repo.dir) + "-worktree");
   repo.git("worktree", "add", "-q", "--detach", worktree);
   // Another process, as another viewer would be, reading from the other worktree.
-  const read = `import { readReview } from ${JSON.stringify(join(cwd, "src/review.ts"))}; console.log(readReview(${JSON.stringify(REVIEW)}).join())`;
+  const read = `import { createTables, readReview } from ${JSON.stringify(join(cwd, "src/review.ts"))}; createTables(); console.log(readReview(${JSON.stringify(REVIEW)}).join())`;
   const fromWorktree = spawnSync(process.execPath, ["--input-type=module", "-e", read], { cwd: worktree, encoding: "utf8" });
   repo.git("worktree", "remove", "--force", worktree);
   expect(fromWorktree.stdout.trim()).toBe(hash);

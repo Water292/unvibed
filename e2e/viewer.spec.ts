@@ -1,7 +1,6 @@
 // The viewer as a user meets it: `node src/view.ts graph.json` on a real repo, in a real browser.
 import { expect, test, type Page } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
-import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { hashLines } from "../src/check.ts";
 import type { Graph } from "../shared/graph.ts";
@@ -175,9 +174,10 @@ test("the panel keeps its share of the window as the window is resized, and stop
 
 test.describe("marking code reviewed", () => {
   // Put everything back for the tests that follow.
-  test.afterEach(() => {
+  test.afterEach(async () => {
     repo.write("app.ts", HEAD);
-    rmSync(join(repo.dir, ".git/unvibed-reviews.sqlite"), { force: true });
+    const { reviewed } = await fetch(`${url}graph.json`).then((r) => r.json());
+    for (const hash of reviewed) await fetch(`${url}mark`, { method: "POST", body: JSON.stringify({ hash, reviewed: false }) });
   });
 
   const getReviewedCheckbox = (page: Page) => panel(page).getByRole("checkbox", { name: "reviewed" });

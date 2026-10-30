@@ -22,7 +22,7 @@ import { createServer, type Plugin } from "vite";
 import { defaultBase } from "./git.ts";
 import type { Graph } from "../shared/graph.ts";
 import { codeFor } from "./hunks.ts";
-import { currentBranch, isBranch, mark, readReview } from "./review.ts";
+import { createTables, currentBranch, isBranch, mark, readReview } from "./review.ts";
 import { z } from "zod";
 import { MarkRequest, type GraphAndCode } from "../shared/graph-and-code.ts";
 
@@ -57,6 +57,7 @@ if (review === undefined) {
   console.error(`no branch is checked out: name the review with --review <name>\n${usage}`);
   process.exit(2);
 }
+createTables();
 /** Why requests are refused: the working tree is shown and another branch is checked out than at startup. */
 function describeBranchChange(): string | undefined {
   if (head !== undefined) return undefined;

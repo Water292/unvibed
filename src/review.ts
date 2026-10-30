@@ -11,22 +11,21 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { git } from "./git.ts";
 
-/**
- * Runs a query on the reviews database, creating it if it doesn't exist yet. Each repo has its own file, so a row needs
- * no repo. A mark is only its review and its hash, so the table has nothing that should change shape; there are no
- * migrations, and an existing file is used as it is. If the shape ever has to change, whether old rows are converted
- * or dropped is decided then.
- */
-function withReviews<T>(query: (db: DatabaseSync) => T): T {
+let db: DatabaseSync;
+
+/** Opens unvibed's database in the repo's common git dir and creates its tables if they don't exist yet. */
+export function createTables(): void {
   const dir = git("rev-parse", "--path-format=absolute", "--git-common-dir").trim();
   // Waits up to 5s for another viewer's write to finish rather than failing at once.
-  const db = new DatabaseSync(join(dir, "unvibed-reviews.sqlite"), { timeout: 5000 });
-  try {
-    db.exec("CREATE TABLE IF NOT EXISTS reviewed (review TEXT NOT NULL, hash TEXT NOT NULL, PRIMARY KEY (review, hash)) WITHOUT ROWID");
-    return query(db);
-  } finally {
-    db.close();
-  }
+  db = new DatabaseSync(join(dir, "unvibed.sqlite"), { timeout: 5000 });
+  // Schema versioning is deferred.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS reviewed (
+      review TEXT NOT NULL,
+      hash TEXT NOT NULL,
+      PRIMARY KEY (review, hash)
+    ) WITHOUT ROWID
+  `);
 }
 
 /** The current branch, which names a review unless another name is given; undefined if no branch is checked out. */
@@ -50,13 +49,12 @@ export const isBranch = (name: string) => {
 
 /** The hashes marked reviewed in a review. */
 export function readReview(review: string): string[] {
-  const rows = withReviews((db) => db.prepare("SELECT hash FROM reviewed WHERE review = ?").all(review));
+  const rows = db.prepare("SELECT hash FROM reviewed WHERE review = ?").all(review);
   return rows.map((row) => row.hash as string);
 }
 
 /** Marks the lines with this hash reviewed, or not, in a review. */
 export function mark(review: string, hash: string, reviewed: boolean): void {
-  withReviews((db) =>
-    db.prepare(reviewed ? "INSERT OR IGNORE INTO reviewed (review, hash) VALUES (?, ?)" : "DELETE FROM reviewed WHERE review = ? AND hash = ?").run(review, hash),
-  );
+  if (reviewed) db.prepare("INSERT OR IGNORE INTO reviewed (review, hash) VALUES (?, ?)").run(review, hash);
+  else db.prepare("DELETE FROM reviewed WHERE review = ? AND hash = ?").run(review, hash);
 }
