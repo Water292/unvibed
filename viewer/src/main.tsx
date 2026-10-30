@@ -91,10 +91,10 @@ function App() {
   const node = graph.nodes.find((n) => n.id === selected);
   // Saves the mark, then records it here, which ticks every location with the same lines. Returns why it couldn't be
   // saved, if it couldn't.
-  const onMark = async (hash: string, mark: boolean) => {
+  const onMark = async (hash: string, reviewed: boolean) => {
     if (!hash) return "these lines can't be read, so they can't be marked";
-    const failure = await sendMark({ hash, reviewed: mark });
-    if (failure === undefined) setMarks((m) => new Map(m).set(hash, mark));
+    const failure = await sendMark({ hash, reviewed });
+    if (failure === undefined) setMarks((m) => new Map(m).set(hash, reviewed));
     return failure;
   };
   // The panel takes a share of the window, kept as the window is resized: once its edge has been dragged, the

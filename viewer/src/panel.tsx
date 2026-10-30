@@ -32,9 +32,9 @@ type Props = {
 export function Panel({ graph, node, marks, onMark, onSelect, width, onWidth, viewType, onViewType }: Props) {
   // The last mark that couldn't be saved: which location, and why.
   const [failure, setFailure] = useState<{ index: number; message: string }>();
-  const markAndReport = async (index: number, hash: string, mark: boolean) => {
+  const markAndReport = async (index: number, hash: string, reviewed: boolean) => {
     setFailure(undefined);
-    const message = await onMark(hash, mark);
+    const message = await onMark(hash, reviewed);
     if (message !== undefined) setFailure({ index, message });
   };
   // While the edge is being dragged only the panel follows it; the new width
