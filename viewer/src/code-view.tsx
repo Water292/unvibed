@@ -83,15 +83,11 @@ export function CodeView({ location: l, viewType, marks, onReviewed, failure }: 
           {l.path}:{start}
           {start !== l.line ? `-${l.line}` : ""} ({side})
         </span>
-        <label style={{ fontSize: 11 }}>
-          <input
-            type="checkbox"
-            disabled={!cut}
-            checked={!!cut && (marks.get(cut.hash) ?? cut.reviewed)}
-            onChange={(e) => cut && onReviewed(cut.hash, e.target.checked)}
-          />{" "}
-          reviewed
-        </label>
+        {cut && (
+          <label style={{ fontSize: 11 }}>
+            <input type="checkbox" checked={marks.get(cut.hash) ?? cut.reviewed} onChange={(e) => onReviewed(cut.hash, e.target.checked)} /> reviewed
+          </label>
+        )}
       </div>
       {failure && <div style={{ fontSize: 11, color: "#dc2626", marginBottom: 4 }}>Couldn't save: {failure}</div>}
       {error && <div style={{ fontSize: 12, opacity: 0.7 }}>{error}</div>}
