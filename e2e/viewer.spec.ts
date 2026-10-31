@@ -1,10 +1,9 @@
 // The viewer as a user meets it: `node src/view.ts graph.json` on a real repo, in a real browser.
 import { expect, test, type Page } from "@playwright/test";
-import { hashLines } from "../src/check.ts";
 import { clearReview, createTables } from "../src/review.ts";
 import type { Graph } from "../shared/graph.ts";
 import { tempRepo } from "../test/temp-repo.ts";
-import { startViewer } from "./start-viewer.ts";
+import { startViewer, UNSTAMPED } from "./start-viewer.ts";
 
 // app.ts at the base and at the head: the head replaces greet's line; add and version don't change.
 const BASE = 'export function greet(name: string) {\n  return "hello " + name;\n}\n\nexport function add(a: number, b: number) {\n  return a + b;\n}\n\nexport const version = 1;\n';
@@ -14,9 +13,9 @@ const HEAD = BASE.replace('"hello "', '"hi "');
 const graph: Graph = {
   schema: "test",
   nodes: [
-    { id: "greet", title: "greet says hi", text: "The greeting is shorter now.", code: [{ path: "app.ts", side: "RIGHT", line: 2, hash: hashLines(['  return "hi " + name;']) }] },
-    { id: "add", title: "add sums two numbers", text: "Unchanged, shown for context.", code: [{ path: "app.ts", side: "RIGHT", start_line: 5, line: 7, hash: hashLines(["export function add(a: number, b: number) {", "  return a + b;", "}"]) }] },
-    { id: "version", title: "the version", text: "Still 1.", code: [{ path: "app.ts", side: "RIGHT", line: 9, hash: hashLines(["export const version = 1;"]) }] },
+    { id: "greet", title: "greet says hi", text: "The greeting is shorter now.", code: [{ path: "app.ts", side: "RIGHT", line: 2, ...UNSTAMPED }] },
+    { id: "add", title: "add sums two numbers", text: "Unchanged, shown for context.", code: [{ path: "app.ts", side: "RIGHT", start_line: 5, line: 7, ...UNSTAMPED }] },
+    { id: "version", title: "the version", text: "Still 1.", code: [{ path: "app.ts", side: "RIGHT", line: 9, ...UNSTAMPED }] },
   ],
   edges: [
     { from: "greet", to: "add" },

@@ -1,15 +1,14 @@
 // Locations with the same lines share a mark: a tick reaches all of them, whichever node they're in.
 import { expect, test } from "@playwright/test";
-import { hashLines } from "../src/check.ts";
 import type { Graph } from "../shared/graph.ts";
 import { tempRepo } from "../test/temp-repo.ts";
-import { startViewer } from "./start-viewer.ts";
+import { startViewer, UNSTAMPED } from "./start-viewer.ts";
 
 // The same line is replaced in three places: lines 2, 5 and 8.
 const BASE = "a\nold\nb\nc\nold\nd\ne\nold\nf\n";
 const HEAD = BASE.replaceAll("old", "NEW");
 
-const location = (line: number) => ({ path: "f.txt", side: "RIGHT" as const, line, hash: hashLines(["NEW"]) });
+const location = (line: number) => ({ path: "f.txt", side: "RIGHT" as const, line, ...UNSTAMPED });
 const graph: Graph = {
   schema: "test",
   nodes: [
