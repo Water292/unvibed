@@ -33,6 +33,13 @@ export type Location = {
   start_line?: number;
   /** Last line. */
   line: number;
-  /** git blob hash of lines start_line..line, joined with "\n", no final newline. */
+  /**
+   * git blob hash of the location's own rows of the diff, joined with "\n", no final newline: lines start_line..line
+   * and the removed or added lines among them, each marked +, - or space. Review marks are made by this hash.
+   */
   hash: string;
+  /** How many of those rows are added lines. */
+  added: number;
+  /** How many of those rows are removed lines. */
+  removed: number;
 };

@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
 import type { Graph, Location } from "../shared/graph.ts";
+import { getChanges, hashLines, ownRows, splitLines } from "./hunks.ts";
 
 /** Reads a file's contents on one side of the diff; undefined if it doesn't exist there. */
 export type ReadFile = (side: Location["side"], path: string) => string | undefined;
@@ -10,45 +10,69 @@ export type Problem = {
   side: Location["side"];
   start_line: number;
   line: number;
-  reason: "missing-file" | "out-of-range" | "hash-mismatch";
-  /** The lines at the location now, when they could be read. */
+  reason: "missing-file" | "out-of-range" | "hash-mismatch" | "count-mismatch";
+  /** The location's own rows of the diff now, when they could be read. */
   actual?: string[];
 };
 
-/** git's blob hash of the lines joined with "\n" (same as `git hash-object`). */
-export function hashLines(lines: string[]): string {
-  const content = Buffer.from(lines.join("\n"), "utf8");
-  return createHash("sha1").update(`blob ${content.length}\0`).update(content).digest("hex");
-}
-
-export function splitLines(text: string): string[] {
-  const lines = text.split("\n");
-  if (lines.at(-1) === "") lines.pop();
-  return lines;
-}
-
 type Read =
-  | { ok: true; lines: string[] }
-  | { ok: false; reason: "missing-file" | "out-of-range"; lines?: string[] };
+  | { ok: true; rows: string[] }
+  | { ok: false; reason: "missing-file" | "out-of-range"; rows?: string[] };
 
-function readLocation(loc: Location, read: ReadFile): Read {
-  const text = read(loc.side, loc.path);
-  if (text === undefined) return { ok: false, reason: "missing-file" };
-  const all = splitLines(text);
-  const start = loc.start_line ?? loc.line;
-  if (start < 1 || loc.line < start || loc.line > all.length) return { ok: false, reason: "out-of-range" };
-  return { ok: true, lines: all.slice(start - 1, loc.line) };
+/** Reads locations' own rows, diffing each file once. */
+function rowsReader(read: ReadFile) {
+  const changes = new Map<string, ReturnType<typeof getChanges>>();
+  return (loc: Location): Read => {
+    const text = read(loc.side, loc.path);
+    if (text === undefined) return { ok: false, reason: "missing-file" };
+    const start = loc.start_line ?? loc.line;
+    if (start < 1 || loc.line < start || loc.line > splitLines(text).length) return { ok: false, reason: "out-of-range" };
+    if (!changes.has(loc.path)) changes.set(loc.path, getChanges(read("LEFT", loc.path), read("RIGHT", loc.path)));
+    return { ok: true, rows: ownRows(changes.get(loc.path)!, loc.side, start, loc.line) };
+  };
 }
 
-/** Every location whose code no longer matches its hash. Empty means the graph points at the code it claims to. */
+/** What a graph stores about a location's rows. */
+const stampOf = (rows: string[]) => ({
+  hash: hashLines(rows),
+  added: rows.filter((r) => r.startsWith("+")).length,
+  removed: rows.filter((r) => r.startsWith("-")).length,
+});
+
+const problemAt = (node: string, loc: Location) => ({ node, path: loc.path, side: loc.side, start_line: loc.start_line ?? loc.line, line: loc.line });
+
+/** Every location whose diff no longer matches what's stored for it. Empty means the graph describes the change it claims to. */
 export function check(graph: Graph, read: ReadFile): Problem[] {
+  const rowsOf = rowsReader(read);
   const problems: Problem[] = [];
   for (const node of graph.nodes) {
     for (const loc of node.code) {
-      const at = { node: node.id, path: loc.path, side: loc.side, start_line: loc.start_line ?? loc.line, line: loc.line };
-      const r = readLocation(loc, read);
-      if (!r.ok) problems.push({ ...at, reason: r.reason });
-      else if (hashLines(r.lines) !== loc.hash) problems.push({ ...at, reason: "hash-mismatch", actual: r.lines });
+      const at = problemAt(node.id, loc);
+      const r = rowsOf(loc);
+      if (!r.ok) {
+        problems.push({ ...at, reason: r.reason });
+        continue;
+      }
+      const stamp = stampOf(r.rows);
+      if (stamp.hash !== loc.hash) problems.push({ ...at, reason: "hash-mismatch", actual: r.rows });
+      else if (stamp.added !== loc.added || stamp.removed !== loc.removed) problems.push({ ...at, reason: "count-mismatch", actual: r.rows });
+    }
+  }
+  return problems;
+}
+
+/**
+ * Fills in each location's hash and counts from its diff, in place. Returns the locations it couldn't read, leaving
+ * those as they were.
+ */
+export function stamp(graph: Graph, read: ReadFile): Problem[] {
+  const rowsOf = rowsReader(read);
+  const problems: Problem[] = [];
+  for (const node of graph.nodes) {
+    for (const loc of node.code) {
+      const r = rowsOf(loc);
+      if (r.ok) Object.assign(loc, stampOf(r.rows));
+      else problems.push({ ...problemAt(node.id, loc), reason: r.reason });
     }
   }
   return problems;

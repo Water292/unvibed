@@ -1,9 +1,8 @@
 // ↑ and ↓ on a code box, in a real browser, on a file long enough to expand into.
 import { expect, test } from "@playwright/test";
-import { hashLines } from "../src/check.ts";
 import type { Graph } from "../shared/graph.ts";
 import { tempRepo } from "../test/temp-repo.ts";
-import { startViewer } from "./start-viewer.ts";
+import { startViewer, UNSTAMPED } from "./start-viewer.ts";
 
 // long.txt: 40 lines; the head changes line 5 and, far below, line 30.
 const lines = Array.from({ length: 40 }, (_, i) => `line ${i + 1}`);
@@ -13,7 +12,7 @@ const HEAD = BASE.replace("line 5\n", "LINE FIVE\n").replace("line 30\n", "LINE 
 // One box, on line 5 only.
 const graph: Graph = {
   schema: "test",
-  nodes: [{ id: "five", title: "line five", text: "", code: [{ path: "long.txt", side: "RIGHT", line: 5, hash: hashLines(["LINE FIVE"]) }] }],
+  nodes: [{ id: "five", title: "line five", text: "", code: [{ path: "long.txt", side: "RIGHT", line: 5, ...UNSTAMPED }] }],
   edges: [],
 };
 
