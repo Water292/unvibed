@@ -33,7 +33,9 @@ test("untouched code passes", () => {
 });
 
 test("editing a line the node explains fails, showing the rows now", () => {
-  expect(check(graph, sides(BASE, "one\nTWO\nthree\nfour\n"))).toMatchObject([{ reason: "hash-mismatch", actual: ["-zwei", "+TWO", " three"] }]);
+  expect(check(graph, sides(BASE, "one\nTWO\nthree\nfour\n"))).toMatchObject([
+    { reason: "hash-mismatch", actual: ["-zwei", "+TWO", " three"], expected: { hash: hashLines(["-zwei", "+TWO", " three"]), added: 1, removed: 1 } },
+  ]);
 });
 
 test("code shifting under the node fails", () => {

@@ -11,8 +11,9 @@ export type Problem = {
   start_line: number;
   line: number;
   reason: "missing-file" | "out-of-range" | "hash-mismatch" | "count-mismatch";
-  /** The location's own rows of the diff now, when they could be read. */
+  /** The location's own rows of the diff now, and what the graph should store for them, when they could be read. */
   actual?: string[];
+  expected?: Diff;
 };
 
 type Read =
@@ -32,14 +33,13 @@ function rowsReader(read: ReadFile) {
   };
 }
 
-/** What a graph stores about a location's rows. */
-const stampOf = (rows: string[]) => ({
+/** What a graph stores about a location's rows: their hash, and how many were added and removed. */
+type Diff = { hash: string; added: number; removed: number };
+export const diffOf = (rows: string[]): Diff => ({
   hash: hashLines(rows),
   added: rows.filter((r) => r.startsWith("+")).length,
   removed: rows.filter((r) => r.startsWith("-")).length,
 });
-
-const problemAt = (node: string, loc: Location) => ({ node, path: loc.path, side: loc.side, start_line: loc.start_line ?? loc.line, line: loc.line });
 
 /** Every location whose diff no longer matches what's stored for it. Empty means the graph describes the change it claims to. */
 export function check(graph: Graph, read: ReadFile): Problem[] {
@@ -47,32 +47,15 @@ export function check(graph: Graph, read: ReadFile): Problem[] {
   const problems: Problem[] = [];
   for (const node of graph.nodes) {
     for (const loc of node.code) {
-      const at = problemAt(node.id, loc);
+      const at = { node: node.id, path: loc.path, side: loc.side, start_line: loc.start_line ?? loc.line, line: loc.line };
       const r = rowsOf(loc);
       if (!r.ok) {
         problems.push({ ...at, reason: r.reason });
         continue;
       }
-      const stamp = stampOf(r.rows);
-      if (stamp.hash !== loc.hash) problems.push({ ...at, reason: "hash-mismatch", actual: r.rows });
-      else if (stamp.added !== loc.added || stamp.removed !== loc.removed) problems.push({ ...at, reason: "count-mismatch", actual: r.rows });
-    }
-  }
-  return problems;
-}
-
-/**
- * Fills in each location's hash and counts from its diff, in place. Returns the locations it couldn't read, leaving
- * those as they were.
- */
-export function stamp(graph: Graph, read: ReadFile): Problem[] {
-  const rowsOf = rowsReader(read);
-  const problems: Problem[] = [];
-  for (const node of graph.nodes) {
-    for (const loc of node.code) {
-      const r = rowsOf(loc);
-      if (r.ok) Object.assign(loc, stampOf(r.rows));
-      else problems.push({ ...problemAt(node.id, loc), reason: r.reason });
+      const expected = diffOf(r.rows);
+      if (expected.hash !== loc.hash) problems.push({ ...at, reason: "hash-mismatch", actual: r.rows, expected });
+      else if (expected.added !== loc.added || expected.removed !== loc.removed) problems.push({ ...at, reason: "count-mismatch", actual: r.rows, expected });
     }
   }
   return problems;

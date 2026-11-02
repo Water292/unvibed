@@ -23,7 +23,7 @@ description = "Everything CI checks"
 depends = ["typecheck", "test", "e2e"]
 
 [tasks.graph]
-description = "Check a graph against the diff it points at, or stamp it: mise run graph check|stamp <graph.json>"
+description = "Check a graph against the diff it points at: mise run graph check <graph.json>"
 run = "node src/cli.ts"
 
 [tasks.view]

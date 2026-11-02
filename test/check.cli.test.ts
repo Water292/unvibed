@@ -1,6 +1,5 @@
 // `check` run as a user runs it: the CLI against a real git repo, reading each side of the PR from git.
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vitest";
 import { hashLines } from "../src/hunks.ts";
@@ -41,27 +40,4 @@ test("check reads LEFT at the base and RIGHT at the head, and without flags the 
   expect(check("--base", base, "--head", "HEAD").status).toBe(0);
   // Without flags: the base is where the branch left origin/main (main's "deux" would fail), the head is the working tree.
   expect(check().status).toBe(0);
-});
-
-test("stamp fills in what check compares, and writes nothing if a location can't be read", () => {
-  const { dir, git, write } = tempRepo();
-  write("a.txt", "one\ntwo\n");
-  git("add", ".");
-  git("commit", "-q", "-m", "base");
-  const base = git("rev-parse", "HEAD");
-  write("a.txt", "one\nTWO\n");
-  const location = (line: number) => ({ path: "a.txt", side: "RIGHT" as const, line, hash: "", added: 0, removed: 0 });
-  const run = (command: string) => spawnSync(process.execPath, [CLI, command, "graph.json", "--base", base], { cwd: dir, encoding: "utf8" });
-  const graphWith = (line: number): Graph => ({ schema: "test", nodes: [{ id: "n", title: "", text: "", code: [location(line)] }], edges: [] });
-  const stored = () => JSON.parse(readFileSync(join(dir, "graph.json"), "utf8")).nodes[0].code[0];
-
-  write("graph.json", JSON.stringify(graphWith(9)));
-  expect(run("stamp").status).toBe(1);
-  expect(stored().hash).toBe("");
-
-  write("graph.json", JSON.stringify(graphWith(2)));
-  expect(run("check").status).toBe(1);
-  expect(run("stamp").status).toBe(0);
-  expect(stored()).toMatchObject({ hash: hashLines(["-two", "+TWO"]), added: 1, removed: 1 });
-  expect(run("check").status).toBe(0);
 });

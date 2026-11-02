@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
-import { stamp } from "../src/check.ts";
+import { check } from "../src/check.ts";
 import { cutFor } from "../src/hunks.ts";
 import { gitWithInput, show } from "../src/git.ts";
 import { MarkRequest } from "../shared/graph-and-code.ts";
@@ -131,12 +131,15 @@ test("lines that can't be read have no hash, so nothing can be marked for them",
   expect(getLocationView(createLocation(1, 1, "missing.ts")).hash).toBe("");
 });
 
-test("a graph stores the hash marks are made by", () => {
+test("a graph's hash is the hash marks are made by", () => {
   writeLines("f.ts", ["a", "B", "c", "d", "e"]); // b replaced, d and e added
-  const locations = [createLocation(2, 3), createLocation(4, 5), createLocation(1, 1)];
-  const problems = stamp({ schema: "test", nodes: [{ id: "n", title: "", text: "", code: locations }], edges: [] }, (side, path) => show(side === "LEFT" ? base : undefined, path));
-  expect(problems).toEqual([]);
-  for (const location of locations) expect(location.hash).toBe(getLocationView(location).hash);
+  const stored = (first: number, last: number, added: number, removed: number) => {
+    const location = createLocation(first, last);
+    return { ...location, hash: getLocationView(location).hash, added, removed };
+  };
+  const code = [stored(2, 3, 1, 1), stored(4, 5, 2, 0), stored(1, 1, 0, 0)];
+  const graph = { schema: "test", nodes: [{ id: "n", title: "", text: "", code }], edges: [] };
+  expect(check(graph, (side, path) => show(side === "LEFT" ? base : undefined, path))).toEqual([]);
 });
 
 test("reviews are kept apart: a mark in one doesn't count in another", () => {

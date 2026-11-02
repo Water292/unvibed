@@ -2,13 +2,14 @@
 import { expect, test } from "@playwright/test";
 import type { Graph } from "../shared/graph.ts";
 import { tempRepo } from "../test/temp-repo.ts";
-import { startViewer, UNSTAMPED } from "./start-viewer.ts";
+import { hashLines } from "../src/hunks.ts";
+import { startViewer } from "./start-viewer.ts";
 
 // The same line is replaced in three places: lines 2, 5 and 8.
 const BASE = "a\nold\nb\nc\nold\nd\ne\nold\nf\n";
 const HEAD = BASE.replaceAll("old", "NEW");
 
-const location = (line: number) => ({ path: "f.txt", side: "RIGHT" as const, line, ...UNSTAMPED });
+const location = (line: number) => ({ path: "f.txt", side: "RIGHT" as const, line, hash: hashLines(["-old", "+NEW"]), added: 1, removed: 1 });
 const graph: Graph = {
   schema: "test",
   nodes: [
