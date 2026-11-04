@@ -8,7 +8,7 @@ export type Graph = {
 };
 
 export type Node = {
-  /** Unique within this graph. */
+  /** A UUID, unique within the graph. */
   id: string;
   /** Short label. */
   title: string;
@@ -19,13 +19,19 @@ export type Node = {
 
 /** `to` helps explain `from`. */
 export type Edge = {
+  /** A UUID, unique within the graph. */
+  id: string;
+  /** A node's id. */
   from: string;
+  /** A node's id. */
   to: string;
   note?: string;
 };
 
 /** GitHub's PR review-comment location; field names unchanged. */
 export type Location = {
+  /** A UUID, unique within the graph. */
+  id: string;
   path: string;
   /** LEFT = base (deleted code), RIGHT = head. */
   side: "LEFT" | "RIGHT";
@@ -42,4 +48,6 @@ export type Location = {
   added: number;
   /** How many of those rows are removed lines. */
   removed: number;
+  /** What these lines do, shown above them. */
+  text: string;
 };

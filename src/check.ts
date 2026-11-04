@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { Graph, Location } from "../shared/graph.ts";
 import { getChanges, hashLines, ownRows, splitLines } from "./hunks.ts";
 
@@ -59,4 +60,37 @@ export function check(graph: Graph, read: ReadFile): Problem[] {
     }
   }
   return problems;
+}
+
+/** An RFC 9562 UUID: any version from 1 to 8, or the all-zero or all-f one. */
+const UUID = z.uuid();
+
+export type IdProblem = {
+  kind: "node" | "edge" | "location";
+  /** The id as the graph has it; undefined if it has none. */
+  id: string | undefined;
+  /** Which node, edge or location, in words, for whoever fixes it. */
+  what: string;
+  reason: "not-a-uuid" | "duplicate";
+};
+
+/** Every node, edge and location whose id isn't a UUID, or is one something else in the graph also has. */
+export function checkIds(graph: Graph): IdProblem[] {
+  const titleOf = new Map(graph.nodes.map((n) => [n.id, n.title]));
+  const all = [
+    ...graph.nodes.map((n) => ({ kind: "node" as const, id: n.id, what: `"${n.title}"` })),
+    ...graph.edges.map((e) => ({ kind: "edge" as const, id: e.id, what: `"${titleOf.get(e.from) ?? e.from}" → "${titleOf.get(e.to) ?? e.to}"` })),
+    ...graph.nodes.flatMap((n) =>
+      n.code.map((l) => ({ kind: "location" as const, id: l.id, what: `${l.path}:${l.start_line ?? l.line}-${l.line} (${l.side}) in "${n.title}"` })),
+    ),
+  ];
+  const uses = new Map<string, number>();
+  for (const { id } of all) if (typeof id === "string") uses.set(id, (uses.get(id) ?? 0) + 1);
+  return all.flatMap((x): IdProblem[] =>
+    !UUID.safeParse(x.id).success
+      ? [{ ...x, reason: "not-a-uuid" as const }]
+      : uses.get(x.id)! > 1
+        ? [{ ...x, reason: "duplicate" as const }]
+        : [],
+  );
 }

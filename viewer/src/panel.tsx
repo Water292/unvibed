@@ -6,8 +6,6 @@ import type { Graph, Node } from "../../shared/graph.ts";
 import { CodeView } from "./code-view.tsx";
 import { ViewType } from "./view-type.ts";
 
-const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
-
 /** The panel floats over the right of the canvas, opening this many pixels wide in a window windowWidth wide; wider for a split diff, which shows base and head side by side. */
 export const initialPanelWidth = (viewType: ViewType, windowWidth: number) =>
   viewType === ViewType.Split ? Math.min(1000, Math.round(windowWidth * 0.65)) : Math.min(560, Math.round(windowWidth * 0.45));
@@ -48,8 +46,8 @@ export function Panel({ graph, node, marks, onMark, onSelect, width, onWidth, vi
     ids.map(({ id, note }) => (
       <div key={id} style={{ fontSize: 12, marginTop: 4 }}>
         {arrow}{" "}
-        <a href="#" onClick={(e) => (e.preventDefault(), onSelect(id))} style={{ fontFamily: MONO }}>
-          {id}
+        <a href="#" onClick={(e) => (e.preventDefault(), onSelect(id))}>
+          {graph.nodes.find((n) => n.id === id)?.title ?? id}
         </a>
         {note ? <span style={{ opacity: 0.7 }}>: {note}</span> : null}
       </div>
@@ -83,8 +81,7 @@ export function Panel({ graph, node, marks, onMark, onSelect, width, onWidth, vi
           colorScheme: "light dark",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-          <div style={{ fontFamily: MONO, fontSize: 12, opacity: 0.6 }}>{node.id}</div>
+        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "baseline" }}>
           <div style={{ display: "flex", gap: 8 }}>
             <ViewToggle viewType={viewType} onViewType={onViewType} />
             <button onClick={() => onSelect(undefined)} title="Close">✕</button>

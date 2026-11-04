@@ -1,4 +1,5 @@
 // Locations with the same lines share a mark: a tick reaches all of them, whichever node they're in.
+import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import type { Graph } from "../shared/graph.ts";
 import { tempRepo } from "../test/temp-repo.ts";
@@ -9,12 +10,13 @@ import { startViewer } from "./start-viewer.ts";
 const BASE = "a\nold\nb\nc\nold\nd\ne\nold\nf\n";
 const HEAD = BASE.replaceAll("old", "NEW");
 
-const location = (line: number) => ({ path: "f.txt", side: "RIGHT" as const, line, hash: hashLines(["-old", "+NEW"]), added: 1, removed: 1 });
+const location = (line: number) => ({ id: randomUUID(), path: "f.txt", side: "RIGHT" as const, line, hash: hashLines(["-old", "+NEW"]), added: 1, removed: 1, text: "" });
+const [TWINS_UUID, OTHER_UUID] = [randomUUID(), randomUUID()];
 const graph: Graph = {
   schema: "test",
   nodes: [
-    { id: "twins", title: "two of them", text: "", code: [location(2), location(5)] },
-    { id: "other", title: "one more", text: "", code: [location(8)] },
+    { id: TWINS_UUID, title: "two of them", text: "", code: [location(2), location(5)] },
+    { id: OTHER_UUID, title: "one more", text: "", code: [location(8)] },
   ],
   edges: [],
 };
@@ -36,7 +38,7 @@ test("a tick reaches every box with the same lines, in this node and others, and
   const open = (id: string) => page.locator(`.react-flow__node[data-id="${id}"]`).click();
 
   await page.goto(viewer.url);
-  await open("twins");
+  await open(TWINS_UUID);
   await expect(boxes).toHaveCount(2);
   await expect(boxes.nth(0)).not.toBeChecked();
   await expect(boxes.nth(1)).not.toBeChecked();
@@ -47,13 +49,13 @@ test("a tick reaches every box with the same lines, in this node and others, and
   await expect(boxes.nth(1)).toBeChecked();
 
   // A box in another node, fetched after the tick, is ticked too; unticking it there reaches back.
-  await open("other");
+  await open(OTHER_UUID);
   await expect(boxes).toHaveCount(1);
   await expect(boxes.nth(0)).toBeChecked();
   await boxes.nth(0).click();
   await expect(boxes.nth(0)).not.toBeChecked();
 
-  await open("twins");
+  await open(TWINS_UUID);
   await expect(boxes).toHaveCount(2);
   await expect(boxes.nth(0)).not.toBeChecked();
   await expect(boxes.nth(1)).not.toBeChecked();

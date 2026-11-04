@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
@@ -44,6 +45,7 @@ beforeEach(() => {
 });
 
 const createLocation = (firstLine: number, lastLine: number, path = "f.ts", side: Location["side"] = "RIGHT"): Location => ({
+  id: randomUUID(),
   path,
   side,
   start_line: firstLine,
@@ -51,6 +53,7 @@ const createLocation = (firstLine: number, lastLine: number, path = "f.ts", side
   hash: "",
   added: 0,
   removed: 0,
+  text: "",
 });
 
 /** What the page gets for a location, against a base: its hash, and whether it's reviewed. */
@@ -138,7 +141,7 @@ test("a graph's hash is the hash marks are made by", () => {
     return { ...location, hash: getLocationView(location).hash, added, removed };
   };
   const code = [stored(2, 3, 1, 1), stored(4, 5, 2, 0), stored(1, 1, 0, 0)];
-  const graph = { schema: "test", nodes: [{ id: "n", title: "", text: "", code }], edges: [] };
+  const graph = { schema: "test", nodes: [{ id: randomUUID(), title: "", text: "", code }], edges: [] };
   expect(check(graph, (side, path) => show(side === "LEFT" ? base : undefined, path))).toEqual([]);
 });
 

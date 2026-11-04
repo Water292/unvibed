@@ -1,5 +1,6 @@
 // `check` run as a user runs it: the CLI against a real git repo, reading each side of the PR from git.
 import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { expect, test } from "vitest";
 import { hashLines } from "../src/hunks.ts";
@@ -27,9 +28,9 @@ test("check reads LEFT at the base and RIGHT at the head, and without flags the 
   const graph: Graph = {
     schema: "test",
     nodes: [
-      { id: "replaced", title: "", text: "", code: [{ path: "a.txt", side: "LEFT", line: 2, hash: hashLines(["-two"]), added: 0, removed: 1 }] },
-      { id: "replacement", title: "", text: "", code: [{ path: "a.txt", side: "RIGHT", line: 2, hash: hashLines(["-two", "+TWO"]), added: 1, removed: 1 }] },
-      { id: "untouched", title: "", text: "", code: [{ path: "b.txt", side: "RIGHT", line: 1, hash: hashLines([" kept"]), added: 0, removed: 0 }] },
+      { id: randomUUID(), title: "", text: "", code: [{ id: randomUUID(), path: "a.txt", side: "LEFT", line: 2, hash: hashLines(["-two"]), added: 0, removed: 1, text: "" }] },
+      { id: randomUUID(), title: "", text: "", code: [{ id: randomUUID(), path: "a.txt", side: "RIGHT", line: 2, hash: hashLines(["-two", "+TWO"]), added: 1, removed: 1, text: "" }] },
+      { id: randomUUID(), title: "", text: "", code: [{ id: randomUUID(), path: "b.txt", side: "RIGHT", line: 1, hash: hashLines([" kept"]), added: 0, removed: 0, text: "" }] },
     ],
     edges: [],
   };

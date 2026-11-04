@@ -6,7 +6,7 @@ const node = (id: string) => ({ id, title: id, text: "", code: [] });
 const graph = (ids: string[], links: [string, string][]): Graph => ({
   schema: "test",
   nodes: ids.map(node),
-  edges: links.map(([from, to]) => ({ from, to })),
+  edges: links.map(([from, to]) => ({ id: `${from}->${to}`, from, to })),
 });
 
 test("every link points right when there is no cycle, whatever the list order", () => {

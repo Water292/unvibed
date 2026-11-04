@@ -1,4 +1,5 @@
 // The viewer as a user meets it: `node src/view.ts graph.json` on a real repo, in a real browser.
+import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { clearReview, createTables } from "../src/review.ts";
 import type { Graph } from "../shared/graph.ts";
@@ -11,16 +12,17 @@ const BASE = 'export function greet(name: string) {\n  return "hello " + name;\n
 const HEAD = BASE.replace('"hello "', '"hi "');
 
 // Three boxes in a row, greet -> add -> version: greet's code changed in the PR, add's and version's didn't.
+const [GREET_UUID, ADD_UUID, VERSION_UUID] = [randomUUID(), randomUUID(), randomUUID()];
 const graph: Graph = {
   schema: "test",
   nodes: [
-    { id: "greet", title: "greet says hi", text: "The greeting is shorter now.", code: [{ path: "app.ts", side: "RIGHT", line: 2, hash: hashLines(['-  return "hello " + name;', '+  return "hi " + name;']), added: 1, removed: 1 }] },
-    { id: "add", title: "add sums two numbers", text: "Unchanged, shown for context.", code: [{ path: "app.ts", side: "RIGHT", start_line: 5, line: 7, hash: hashLines([" export function add(a: number, b: number) {", "   return a + b;", " }"]), added: 0, removed: 0 }] },
-    { id: "version", title: "the version", text: "Still 1.", code: [{ path: "app.ts", side: "RIGHT", line: 9, hash: hashLines([" export const version = 1;"]), added: 0, removed: 0 }] },
+    { id: GREET_UUID, title: "greet says hi", text: "The greeting is shorter now.", code: [{ id: randomUUID(), path: "app.ts", side: "RIGHT", line: 2, hash: hashLines(['-  return "hello " + name;', '+  return "hi " + name;']), added: 1, removed: 1, text: "" }] },
+    { id: ADD_UUID, title: "add sums two numbers", text: "Unchanged, shown for context.", code: [{ id: randomUUID(), path: "app.ts", side: "RIGHT", start_line: 5, line: 7, hash: hashLines([" export function add(a: number, b: number) {", "   return a + b;", " }"]), added: 0, removed: 0, text: "" }] },
+    { id: VERSION_UUID, title: "the version", text: "Still 1.", code: [{ id: randomUUID(), path: "app.ts", side: "RIGHT", line: 9, hash: hashLines([" export const version = 1;"]), added: 0, removed: 0, text: "" }] },
   ],
   edges: [
-    { from: "greet", to: "add" },
-    { from: "add", to: "version" },
+    { id: randomUUID(), from: GREET_UUID, to: ADD_UUID },
+    { id: randomUUID(), from: ADD_UUID, to: VERSION_UUID },
   ],
 };
 
@@ -42,7 +44,10 @@ test.beforeAll(async ({}, { parallelIndex }) => {
 test.afterAll(() => viewer.stop());
 
 const box = (page: Page, id: string) => page.locator(`.react-flow__node[data-id="${id}"]`);
-const link = (page: Page, from: string, to: string) => page.locator(`.react-flow__edge[data-id="${from}->${to}"] path`).first();
+const link = (page: Page, from: string, to: string) => {
+  const edge = graph.edges.find((e) => e.from === from && e.to === to)!;
+  return page.locator(`.react-flow__edge[data-id="${edge.id}"] path`).first();
+};
 const panel = (page: Page) => page.locator("aside");
 const handle = (page: Page) => page.getByTitle("Drag to resize");
 
@@ -50,26 +55,26 @@ test("read a graph: hover lights a box's neighbourhood, clicking opens its panel
   await page.goto(viewer.url);
 
   // Hovering greet keeps it, its link and add lit; version fades.
-  await box(page, "greet").hover();
-  await expect(box(page, "greet")).toHaveCSS("opacity", "1");
-  await expect(box(page, "add")).toHaveCSS("opacity", "1");
-  await expect(link(page, "greet", "add")).toHaveCSS("opacity", "1");
-  await expect(box(page, "version")).not.toHaveCSS("opacity", "1");
+  await box(page, GREET_UUID).hover();
+  await expect(box(page, GREET_UUID)).toHaveCSS("opacity", "1");
+  await expect(box(page, ADD_UUID)).toHaveCSS("opacity", "1");
+  await expect(link(page, GREET_UUID, ADD_UUID)).toHaveCSS("opacity", "1");
+  await expect(box(page, VERSION_UUID)).not.toHaveCSS("opacity", "1");
   // Both links are still drawn, the faded one too.
-  await expect(link(page, "greet", "add")).toHaveCount(1);
-  await expect(link(page, "add", "version")).toHaveCount(1);
+  await expect(link(page, GREET_UUID, ADD_UUID)).toHaveCount(1);
+  await expect(link(page, ADD_UUID, VERSION_UUID)).toHaveCount(1);
 
   // Clicking selects it; it stays lit once the cursor leaves for the empty canvas (Playwright checks nothing covers
   // the corner it hovers).
-  await box(page, "greet").click();
+  await box(page, GREET_UUID).click();
   await page.locator(".react-flow__pane").hover({ position: { x: 1, y: 1 } });
-  await expect(box(page, "add")).toHaveCSS("opacity", "1");
-  await expect(box(page, "version")).not.toHaveCSS("opacity", "1");
+  await expect(box(page, ADD_UUID)).toHaveCSS("opacity", "1");
+  await expect(box(page, VERSION_UUID)).not.toHaveCSS("opacity", "1");
 
   // It and its neighbour are brought into view, clear of the panel.
   await expect(async () => {
     const edge = (await panel(page).boundingBox())!.x;
-    for (const id of ["greet", "add"]) {
+    for (const id of [GREET_UUID, ADD_UUID]) {
       const b = (await box(page, id).boundingBox())!;
       expect(b.x).toBeGreaterThanOrEqual(0);
       expect(b.x + b.width).toBeLessThanOrEqual(edge);
@@ -82,7 +87,7 @@ test("read a graph: hover lights a box's neighbourhood, clicking opens its panel
   await expect(panel(page)).toContainText('return "hi " + name;');
 
   // A link walks to add, whose code the PR didn't change but is still shown.
-  await panel(page).getByRole("link", { name: "add" }).click();
+  await panel(page).getByRole("link", { name: "add sums two numbers" }).click();
   await expect(panel(page)).toContainText("add sums two numbers");
   await expect(panel(page)).toContainText("return a + b;");
 
@@ -93,7 +98,7 @@ test("read a graph: hover lights a box's neighbourhood, clicking opens its panel
 test("dark mode: the canvas, the panel and the code follow the system", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto(viewer.url);
-  await box(page, "greet").click();
+  await box(page, GREET_UUID).click();
   await expect(panel(page)).toContainText('return "hi " + name;');
   const brightness = (selector: string) =>
     page.locator(selector).first().evaluate((el) => {
@@ -111,7 +116,7 @@ test("dark mode: the canvas, the panel and the code follow the system", async ({
 
 test("the diff view and the panel's width survive a reload", async ({ page }) => {
   await page.goto(viewer.url);
-  await box(page, "greet").click();
+  await box(page, GREET_UUID).click();
 
   // Split shows base and head as two columns.
   const codeColumns = () => panel(page).locator(".code-view").first().evaluate((el) => new Set([...el.querySelectorAll("td")].filter((td) => td.textContent?.includes("return")).map((td) => Math.round(td.getBoundingClientRect().x))).size);
@@ -128,12 +133,12 @@ test("the diff view and the panel's width survive a reload", async ({ page }) =>
   const width = (await panel(page).boundingBox())!.width;
 
   await page.reload();
-  await box(page, "greet").click();
+  await box(page, GREET_UUID).click();
   await expect(page.getByRole("button", { name: "Split" })).toHaveAttribute("aria-pressed", "true");
   expect(Math.abs((await panel(page).boundingBox())!.width - width)).toBeLessThanOrEqual(1);
 
   // Another box opens in Split too; Unified brings back one column.
-  await panel(page).getByRole("link", { name: "add" }).click();
+  await panel(page).getByRole("link", { name: "add sums two numbers" }).click();
   await expect(page.getByRole("button", { name: "Split" })).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("button", { name: "Unified" }).click();
   await expect.poll(codeColumns).toBe(1);
@@ -141,7 +146,7 @@ test("the diff view and the panel's width survive a reload", async ({ page }) =>
 
 test("the panel keeps its share of the window as the window is resized, and stops short of the window's edge", async ({ page }) => {
   await page.goto(viewer.url);
-  await box(page, "greet").click();
+  await box(page, GREET_UUID).click();
 
   // Half of a 1200-pixel window.
   const h = (await handle(page).boundingBox())!;
@@ -185,32 +190,32 @@ test.describe("marking code reviewed", () => {
   const appWithEditedGreet = HEAD.replace(greetLineInPr, editedGreetLine);
 
   test("ticking a location's box marks it reviewed, and it stays reviewed after a reload", async ({ page }) => {
-    await openBox(page, "greet", greetLineInPr);
+    await openBox(page, GREET_UUID, greetLineInPr);
     await expect(getReviewedCheckbox(page)).not.toBeChecked();
     await getReviewedCheckbox(page).click(); // the box ticks once the server has saved the mark
     await expect(getReviewedCheckbox(page)).toBeChecked();
 
-    await openBox(page, "greet", greetLineInPr);
+    await openBox(page, GREET_UUID, greetLineInPr);
     await expect(getReviewedCheckbox(page)).toBeChecked();
 
     await getReviewedCheckbox(page).click();
-    await openBox(page, "greet", greetLineInPr);
+    await openBox(page, GREET_UUID, greetLineInPr);
     await expect(getReviewedCheckbox(page)).not.toBeChecked();
   });
 
   test("ticking code that changed after the page showed it marks the lines on screen", async ({ page }) => {
-    await openBox(page, "greet", greetLineInPr);
+    await openBox(page, GREET_UUID, greetLineInPr);
     // Saved while the page still shows the old line.
     repo.write("app.ts", appWithEditedGreet);
     await getReviewedCheckbox(page).click();
     await expect(getReviewedCheckbox(page)).toBeChecked();
 
     // After a reload the page shows the new line, which wasn't ticked.
-    await openBox(page, "greet", editedGreetLine);
+    await openBox(page, GREET_UUID, editedGreetLine);
     await expect(getReviewedCheckbox(page)).not.toBeChecked();
 
     repo.write("app.ts", HEAD);
-    await openBox(page, "greet", greetLineInPr);
+    await openBox(page, GREET_UUID, greetLineInPr);
     await expect(getReviewedCheckbox(page)).toBeChecked();
   });
 });

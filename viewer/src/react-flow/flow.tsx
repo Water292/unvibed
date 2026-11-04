@@ -65,11 +65,10 @@ export function Flow({ graph, selected, onSelect, covered }: Props) {
       data: {
         label: (
           <div style={{ textAlign: "left" }}>
-            <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, opacity: 0.6 }}>{n.id}</div>
             <div style={{ fontSize: 13, lineHeight: 1.35 }}>{n.title}</div>
             {incoming.map((e) => (
-              <div key={e.from} style={{ fontSize: 11, opacity: 0.55, marginTop: 4 }}>
-                ← {e.from}
+              <div key={e.id} style={{ fontSize: 11, opacity: 0.55, marginTop: 4 }}>
+                ← {graph.nodes.find((f) => f.id === e.from)?.title ?? e.from}
                 {e.note ? `: ${e.note}` : ""}
               </div>
             ))}
@@ -98,7 +97,7 @@ export function Flow({ graph, selected, onSelect, covered }: Props) {
     const back = isBack(e.from, e.to);
     const on = touches(e);
     return {
-      id: `${e.from}->${e.to}`,
+      id: e.id,
       source: e.from,
       target: e.to,
       type: "smoothstep",
