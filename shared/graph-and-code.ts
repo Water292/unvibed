@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** Unchanged lines /code keeps around a cut's lines, as git keeps around a change. */
+export const CONTEXT = 3;
+
 /** A query value that's a count of lines. */
 const whole = z.coerce.number().int().min(0);
 

@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import gitdiffModule, { type Change } from "gitdiff-parser";
 import { git, gitWithInput, show } from "./git.ts";
 import { isReviewed } from "./review.ts";
-import type { CodeCut } from "../shared/graph-and-code.ts";
+import { CONTEXT, type CodeCut } from "../shared/graph-and-code.ts";
 import type { Location } from "../shared/graph.ts";
 
 /**
@@ -45,9 +45,6 @@ export function getChanges(before: string | undefined, after: string | undefined
   const diff = git("diff", "--unified=100000", blob(before), blob(after));
   return gitdiff.parse(diff)[0]?.hunks.flatMap((h) => h.changes) ?? [];
 }
-
-/** Unchanged lines kept around a location's lines, as git keeps around a change. */
-export const CONTEXT = 3;
 
 /**
  * The changes in a location's line range, counted on its side, with up to
