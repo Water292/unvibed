@@ -2,7 +2,7 @@
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { expect, test } from "vitest";
-import { hashLines } from "../src/check.ts";
+import { hashLines } from "../src/hunks.ts";
 import type { Graph } from "../shared/graph.ts";
 import { tempRepo } from "./temp-repo.ts";
 
@@ -27,9 +27,9 @@ test("check reads LEFT at the base and RIGHT at the head, and without flags the 
   const graph: Graph = {
     schema: "test",
     nodes: [
-      { id: "replaced", title: "", text: "", code: [{ path: "a.txt", side: "LEFT", line: 2, hash: hashLines(["two"]) }] },
-      { id: "replacement", title: "", text: "", code: [{ path: "a.txt", side: "RIGHT", line: 2, hash: hashLines(["TWO"]) }] },
-      { id: "untouched", title: "", text: "", code: [{ path: "b.txt", side: "RIGHT", line: 1, hash: hashLines(["kept"]) }] },
+      { id: "replaced", title: "", text: "", code: [{ path: "a.txt", side: "LEFT", line: 2, hash: hashLines(["-two"]), added: 0, removed: 1 }] },
+      { id: "replacement", title: "", text: "", code: [{ path: "a.txt", side: "RIGHT", line: 2, hash: hashLines(["-two", "+TWO"]), added: 1, removed: 1 }] },
+      { id: "untouched", title: "", text: "", code: [{ path: "b.txt", side: "RIGHT", line: 1, hash: hashLines([" kept"]), added: 0, removed: 0 }] },
     ],
     edges: [],
   };

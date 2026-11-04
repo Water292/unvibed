@@ -2,8 +2,9 @@ import { spawnSync } from "node:child_process";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
+import { check } from "../src/check.ts";
 import { cutFor } from "../src/hunks.ts";
-import { gitWithInput } from "../src/git.ts";
+import { gitWithInput, show } from "../src/git.ts";
 import { MarkRequest } from "../shared/graph-and-code.ts";
 import { createTables, currentBranch, isReviewed, mark } from "../src/review.ts";
 import type { Location } from "../shared/graph.ts";
@@ -48,6 +49,8 @@ const createLocation = (firstLine: number, lastLine: number, path = "f.ts", side
   start_line: firstLine,
   line: lastLine,
   hash: "",
+  added: 0,
+  removed: 0,
 });
 
 /** What the page gets for a location, against a base: its hash, and whether it's reviewed. */
@@ -126,6 +129,17 @@ test("widening a location with ↑ / ↓ keeps its hash, so its mark holds", () 
 test("lines that can't be read have no hash, so nothing can be marked for them", () => {
   expect(getLocationView(createLocation(9, 9)).hash).toBe("");
   expect(getLocationView(createLocation(1, 1, "missing.ts")).hash).toBe("");
+});
+
+test("a graph's hash is the hash marks are made by", () => {
+  writeLines("f.ts", ["a", "B", "c", "d", "e"]); // b replaced, d and e added
+  const stored = (first: number, last: number, added: number, removed: number) => {
+    const location = createLocation(first, last);
+    return { ...location, hash: getLocationView(location).hash, added, removed };
+  };
+  const code = [stored(2, 3, 1, 1), stored(4, 5, 2, 0), stored(1, 1, 0, 0)];
+  const graph = { schema: "test", nodes: [{ id: "n", title: "", text: "", code }], edges: [] };
+  expect(check(graph, (side, path) => show(side === "LEFT" ? base : undefined, path))).toEqual([]);
 });
 
 test("reviews are kept apart: a mark in one doesn't count in another", () => {

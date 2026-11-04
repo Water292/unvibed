@@ -1,8 +1,9 @@
 // One location's code at a time, as a small unified diff, for a code box in
-// the viewer's side panel, in the plain format any diff renderer reads, with
-// the hash marks are made by. Runs in Node (view.ts).
+// the viewer's side panel, in the plain format any diff renderer reads, and
+// its own rows, which a graph stores the hash of and marks are made by. Runs
+// in Node (view.ts, check.ts).
+import { createHash } from "node:crypto";
 import gitdiffModule, { type Change } from "gitdiff-parser";
-import { hashLines, splitLines } from "./check.ts";
 import { git, gitWithInput, show } from "./git.ts";
 import { isReviewed } from "./review.ts";
 import type { CodeCut } from "../shared/graph-and-code.ts";
@@ -13,6 +14,18 @@ import type { Location } from "../shared/graph.ts";
  * parser one level down, under `.default`; Node gives an ES module the parser itself, so it's typed that way here.
  */
 export const gitdiff = gitdiffModule as unknown as typeof gitdiffModule.default;
+
+/** git's blob hash of the lines joined with "\n" (same as `git hash-object`). */
+export function hashLines(lines: string[]): string {
+  const content = Buffer.from(lines.join("\n"), "utf8");
+  return createHash("sha1").update(`blob ${content.length}\0`).update(content).digest("hex");
+}
+
+export function splitLines(text: string): string[] {
+  const lines = text.split("\n");
+  if (lines.at(-1) === "") lines.pop();
+  return lines;
+}
 
 /** A line's number on the old or the new side; -1 when the line isn't on that side. */
 const oldLine = (c: Change) => (c.type === "normal" ? c.oldLineNumber : c.type === "delete" ? c.lineNumber : -1);
@@ -85,6 +98,18 @@ export function diffText(path: string, changes: Change[]): string {
   ].join("\n") + "\n"; // every line ends in a newline, the last one too, as in git's own diffs
 }
 
+/**
+ * A location's own rows, as unified diff lines: its lines, removed lines included, and not the unchanged lines around
+ * them, any line numbers, or lines it was widened by. The same lines, changed the same way, keep their hash, and so
+ * their mark, wherever they move.
+ */
+export function ownRows(changes: Change[], side: Location["side"], start: number, end: number): string[] {
+  const line = side === "LEFT" ? oldLine : newLine;
+  return hunkIn(changes, side, start, end)
+    .filter((c) => c.type !== "normal" || (line(c) >= start && line(c) <= end))
+    .map(toDiffLine);
+}
+
 /** What a location shows when its file can't be read on its side. */
 export const EMPTY_CUT: CodeCut = { diff: "", moreAbove: false, moreBelow: false, hash: "", reviewed: false };
 
@@ -98,12 +123,9 @@ export function cutFor(path: string, side: Location["side"], start: number, end:
   const after = show(head, path);
   if ((side === "LEFT" ? before : after) === undefined) return EMPTY_CUT;
   const changes = getChanges(before, after);
-  // The hash covers the location's own rows, removed lines included, and not the unchanged lines around them, any
-  // line numbers, or lines it was widened by: the same lines, changed the same way, keep their mark wherever they move.
-  const line = side === "LEFT" ? oldLine : newLine;
-  const own = hunkIn(changes, side, start, end).filter((c) => c.type !== "normal" || (line(c) >= start && line(c) <= end));
+  const own = ownRows(changes, side, start, end);
   const cut = hunkIn(changes, side, start, end, above, below);
-  const hash = own.length ? hashLines(own.map(toDiffLine)) : "";
+  const hash = own.length ? hashLines(own) : "";
   return {
     diff: diffText(path, cut),
     moreAbove: cut.length > 0 && cut[0] !== changes[0],

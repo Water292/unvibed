@@ -2,6 +2,8 @@
 //
 //   node src/cli.ts check <graph.json> [--base <rev>] [--head <rev>]
 //
+// Compares each location's diff with the hash and counts the graph stores,
+// and prints what they should be where they don't match.
 // LEFT locations are read at --base (default: merge-base of origin/main and HEAD),
 // RIGHT locations at --head (default: the working tree).
 import { readFileSync } from "node:fs";
@@ -37,6 +39,7 @@ function main(argv: string[]): number {
   for (const p of problems) {
     console.log(`✗ ${p.node}: ${p.path}:${p.start_line}-${p.line} (${p.side}) ${p.reason}`);
     for (const l of p.actual ?? []) console.log(`    | ${l}`);
+    if (p.expected) console.log(`    should be: hash ${p.expected.hash}, added ${p.expected.added}, removed ${p.expected.removed}`);
   }
   const count = graph.nodes.reduce((n, node) => n + node.code.length, 0);
   console.log(problems.length ? `${problems.length} of ${count} locations do not match` : `ok: all ${count} locations match`);
