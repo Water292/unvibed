@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { expect, test } from "vitest";
-import { check, type ReadFile } from "../src/check.ts";
+import { check, checkIds, type ReadFile } from "../src/check.ts";
 import { hashLines } from "../src/hunks.ts";
 import type { Graph } from "../shared/graph.ts";
 
@@ -9,10 +10,10 @@ const graph: Graph = {
   schema: "test",
   nodes: [
     {
-      id: "n",
+      id: randomUUID(),
       title: "t",
       text: "",
-      code: [{ path: "example.ts", side: "RIGHT", start_line: 2, line: 3, hash: hashLines(["-zwei", "+two", " three"]), added: 1, removed: 1 }],
+      code: [{ id: randomUUID(), path: "example.ts", side: "RIGHT", start_line: 2, line: 3, hash: hashLines(["-zwei", "+two", " three"]), added: 1, removed: 1, text: "" }],
     },
   ],
   edges: [],
@@ -59,4 +60,23 @@ test("counts that don't match the rows fail, even with the right hash", () => {
 test("a location past the end of its file, or in a file that isn't there, fails", () => {
   expect(check(graph, sides(BASE, "one\n"))).toMatchObject([{ reason: "out-of-range" }]);
   expect(check(graph, () => undefined)).toMatchObject([{ reason: "missing-file" }]);
+});
+
+test("every node, edge and location has a UUID of its own", () => {
+  const node = graph.nodes[0]!;
+  const ok: Graph = { ...graph, edges: [{ id: randomUUID(), from: node.id, to: node.id }] };
+  expect(checkIds(ok)).toEqual([]);
+
+  const location = node.code[0]!;
+  const broken: Graph = {
+    ...graph,
+    nodes: [{ ...node, id: "n", code: [{ ...location, id: undefined as unknown as string }] }],
+    edges: [{ id: location.id, from: "n", to: "n" }, { id: location.id, from: "n", to: "n" }],
+  };
+  expect(checkIds(broken)).toMatchObject([
+    { kind: "node", id: "n", reason: "not-a-uuid" },
+    { kind: "edge", reason: "duplicate" },
+    { kind: "edge", reason: "duplicate" },
+    { kind: "location", id: undefined, reason: "not-a-uuid" },
+  ]);
 });

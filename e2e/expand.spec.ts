@@ -1,4 +1,5 @@
 // ↑ and ↓ on a code box, in a real browser, on a file long enough to expand into.
+import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import type { Graph } from "../shared/graph.ts";
 import { tempRepo } from "../test/temp-repo.ts";
@@ -11,9 +12,10 @@ const BASE = lines.join("\n") + "\n";
 const HEAD = BASE.replace("line 5\n", "LINE FIVE\n").replace("line 30\n", "LINE THIRTY\n");
 
 // One box, on line 5 only.
+const FIVE_UUID = randomUUID();
 const graph: Graph = {
   schema: "test",
-  nodes: [{ id: "five", title: "line five", text: "", code: [{ path: "long.txt", side: "RIGHT", line: 5, hash: hashLines(["-line 5", "+LINE FIVE"]), added: 1, removed: 1 }] }],
+  nodes: [{ id: FIVE_UUID, title: "line five", text: "", code: [{ id: randomUUID(), path: "long.txt", side: "RIGHT", line: 5, hash: hashLines(["-line 5", "+LINE FIVE"]), added: 1, removed: 1, text: "" }] }],
   edges: [],
 };
 
@@ -32,7 +34,7 @@ test.afterAll(() => viewer.stop());
 
 test("↓ shows 20 more lines at a time, other changes as changes, until the end of the file; ↑ at the top", async ({ page }) => {
   await page.goto(viewer.url);
-  await page.locator('.react-flow__node[data-id="five"]').click();
+  await page.locator(`.react-flow__node[data-id="${FIVE_UUID}"]`).click();
   const box = page.locator("aside .code-view");
   const up = box.getByRole("button", { name: "↑" });
   const down = box.getByRole("button", { name: "↓" });
