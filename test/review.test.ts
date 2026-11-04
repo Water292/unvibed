@@ -2,38 +2,31 @@ import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
 import { join } from "node:path";
-import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
+import { beforeAll, beforeEach, expect, test } from "vitest";
 import { check } from "../src/check.ts";
 import { cutFor } from "../src/hunks.ts";
 import { gitWithInput, show } from "../src/git.ts";
 import { MarkRequest } from "../shared/graph-and-code.ts";
-import { createTables, currentBranch, isReviewed, mark } from "../src/review.ts";
+import { createTables } from "../src/db.ts";
+import { currentBranch, isReviewed, mark } from "../src/review.ts";
 import type { Location } from "../shared/graph.ts";
-import { tempRepo } from "./temp-repo.ts";
+import { inTempRepo } from "./in-temp-repo.ts";
 
 // Marks in a real repo, read as the viewer reads them.
 
-let repo: ReturnType<typeof tempRepo>;
+const getRepo = inTempRepo();
+let repo: ReturnType<typeof getRepo>;
 let base: string;
-let cwd: string;
 const REVIEW = "pr"; // the review these tests mark in
+const VIEW = join(import.meta.dirname, "../src/view.ts");
 const writeLines = (path: string, lines: string[]) => repo.write(path, lines.join("\n") + "\n");
 
-// One repo for every test in this file. The tests run from inside it, because the code they test runs git in the
-// current directory.
 beforeAll(() => {
-  cwd = process.cwd();
-  repo = tempRepo();
-  process.chdir(repo.dir);
+  repo = getRepo();
   writeLines("f.ts", ["a", "b", "c"]);
   repo.git("add", ".");
   repo.git("commit", "-q", "-m", "base");
   base = repo.git("rev-parse", "HEAD");
-});
-
-afterAll(() => {
-  process.chdir(cwd);
-  rmSync(repo.dir, { recursive: true, force: true });
 });
 
 // Each test starts from the PR's change, with no other files and nothing marked.
@@ -158,14 +151,14 @@ test("a review is named after the current branch", () => {
 test("with no branch checked out, the viewer asks for a review name instead of starting", () => {
   const branch = currentBranch()!;
   repo.git("checkout", "-q", "--detach");
-  const view = spawnSync(process.execPath, [join(cwd, "src/view.ts"), "graph.json", "--base", "HEAD"], { encoding: "utf8" });
+  const view = spawnSync(process.execPath, [VIEW, "graph.json", "--base", "HEAD"], { encoding: "utf8" });
   repo.git("checkout", "-q", branch);
   expect(view.status).toBe(2);
   expect(view.stderr).toContain("name the review with --review <name>");
 });
 
 test("a --head that isn't a branch can't name the review, so the viewer asks for one", () => {
-  const view = spawnSync(process.execPath, [join(cwd, "src/view.ts"), "graph.json", "--base", "HEAD", "--head", "HEAD"], { encoding: "utf8" });
+  const view = spawnSync(process.execPath, [VIEW, "graph.json", "--base", "HEAD", "--head", "HEAD"], { encoding: "utf8" });
   expect(view.status).toBe(2);
   expect(view.stderr).toContain("HEAD isn't a branch: name the review with --review <name>");
 });
