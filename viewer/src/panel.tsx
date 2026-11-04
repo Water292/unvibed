@@ -1,10 +1,10 @@
 // The side panel for the selected node: its explanation, the nodes it links
-// to and from, and the code it points at, with a reviewed box on each
-// location.
+// to and from, and the code it points at, with an explanation and a
+// reviewed box on each location.
 import { useState, type PointerEvent } from "react";
 import type { Graph, Node } from "../../shared/graph.ts";
-import { CodeView } from "./code-view.tsx";
-import type { RenderedLocation } from "./rendered-location.ts";
+import { groupLocations } from "./blend.ts";
+import { LocationGroup } from "./code-view.tsx";
 import { ViewType } from "./view-type.ts";
 
 /** The panel floats over the right of the canvas, opening this many pixels wide in a window windowWidth wide; wider for a split diff, which shows base and head side by side. */
@@ -19,8 +19,6 @@ export const clampPanelWidth = (width: number, windowWidth: number) => Math.max(
 type Props = {
   graph: Graph;
   node: Node;
-  /** The node's locations, as shown. */
-  locations: RenderedLocation[];
   marks: ReadonlyMap<string, boolean>;
   onMark: (hash: string, reviewed: boolean) => Promise<string | undefined>;
   onSelect: (id: string | undefined) => void;
@@ -30,7 +28,7 @@ type Props = {
   onViewType: (viewType: ViewType) => void;
 };
 
-export function Panel({ graph, node, locations, marks, onMark, onSelect, width, onWidth, viewType, onViewType }: Props) {
+export function Panel({ graph, node, marks, onMark, onSelect, width, onWidth, viewType, onViewType }: Props) {
   // The last mark that couldn't be saved: which location, and why.
   const [failure, setFailure] = useState<{ index: number; message: string }>();
   const markAndReport = async (index: number, hash: string, reviewed: boolean) => {
@@ -94,14 +92,14 @@ export function Panel({ graph, node, locations, marks, onMark, onSelect, width, 
         <p style={{ fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{node.text}</p>
         {links(incoming, "←")}
         {links(outgoing, "→")}
-        {locations.map((location, i) => (
-          <CodeView
-            key={`${node.id}:${i}`}
-            location={location}
+        {groupLocations(node.code).map((group) => (
+          <LocationGroup
+            key={`${node.id}:${group[0]!.location.side}:${group[0]!.location.path}`}
+            group={group}
             viewType={viewType}
             marks={marks}
-            onReviewed={(hash, r) => markAndReport(i, hash, r)}
-            failure={failure?.index === i ? failure.message : undefined}
+            onReviewed={markAndReport}
+            failure={failure}
           />
         ))}
       </aside>
