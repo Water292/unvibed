@@ -102,12 +102,17 @@ test("dark mode: the canvas, the panel and the code follow the system", async ({
   await expect(panel(page)).toContainText('return "hi " + name;');
   const brightness = (selector: string) =>
     page.locator(selector).first().evaluate((el) => {
-      // the colour behind the element: its own background, else the nearest ancestor's that isn't transparent
+      // the colour that shows behind the element: its own background and its ancestors', each translucent one (a
+      // tint) laid over the ones below it, down to the nearest opaque one, or white
+      const layers: number[][] = [];
       for (let e: Element | null = el; e; e = e.parentElement) {
         const [r, g, b, a = 1] = getComputedStyle(e).backgroundColor.match(/[\d.]+/g)!.map(Number);
-        if (a > 0) return (r! + g! + b!) / 3;
+        if (a > 0) layers.push([r!, g!, b!, a]);
+        if (a === 1) break;
       }
-      return 255;
+      let shown = [255, 255, 255];
+      for (const [r, g, b, a] of layers.reverse()) shown = [r!, g!, b!].map((c, i) => c * a! + shown[i]! * (1 - a!));
+      return (shown[0]! + shown[1]! + shown[2]!) / 3;
     });
   expect(await brightness(".react-flow")).toBeLessThan(80);
   expect(await brightness("aside")).toBeLessThan(80);
@@ -201,6 +206,32 @@ test.describe("marking code reviewed", () => {
     await getReviewedCheckbox(page).click();
     await openBox(page, GREET_UUID, greetLineInPr);
     await expect(getReviewedCheckbox(page)).not.toBeChecked();
+  });
+
+  test("changed code is yellow, on its node and its box, until ticked, then green, after a reload too; unchanged code isn't tinted", async ({ page }) => {
+    const [yellow, green] = ["rgba(234, 179, 8, 0.25)", "rgba(34, 197, 94, 0.22)"];
+    const nodeBackground = (id: string) => box(page, id).evaluate((el) => getComputedStyle(el).backgroundImage);
+    // the location's box: the code and the line above it with its path and reviewed box
+    const locationBox = () => panel(page).locator(".code-view").locator("..");
+
+    await openBox(page, GREET_UUID, greetLineInPr);
+    // greet's one location removes a line and adds one: its bar is half red, half green
+    expect(await nodeBackground(GREET_UUID)).toContain("linear-gradient(to right, rgb(239, 68, 68) 50%, rgb(34, 197, 94) 50%)");
+    expect(await nodeBackground(GREET_UUID)).toContain(yellow);
+    await expect(locationBox()).toHaveCSS("background-color", yellow);
+    expect(await nodeBackground(ADD_UUID)).toBe("none");
+
+    await getReviewedCheckbox(page).click();
+    await expect(locationBox()).toHaveCSS("background-color", green);
+    await expect.poll(() => nodeBackground(GREET_UUID)).toContain(green);
+
+    // the page loads the review's marks with the graph, so the node is green before anything opens
+    await page.reload();
+    await expect.poll(() => nodeBackground(GREET_UUID)).toContain(green);
+
+    await box(page, ADD_UUID).click();
+    await expect(panel(page)).toContainText("return a + b;");
+    await expect(locationBox()).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   });
 
   test("ticking code that changed after the page showed it marks the lines on screen", async ({ page }) => {

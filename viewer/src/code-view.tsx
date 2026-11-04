@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import "./code-view.css";
 import type { CodeCut } from "../../shared/graph-and-code.ts";
 import type { Location } from "../../shared/graph.ts";
+import { tint } from "./review-status.ts";
 import { ViewType } from "./view-type.ts";
 
 const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
@@ -77,7 +78,7 @@ export function CodeView({ location: l, viewType, marks, onReviewed, failure }: 
   const start = l.start_line ?? l.line;
   const side = l.side === "LEFT" ? "base" : "head";
   return (
-    <div style={{ marginTop: 16 }}>
+    <div style={{ marginTop: 16, padding: 6, borderRadius: 8, background: tint([l], marks) }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
         <span style={{ fontFamily: MONO, fontSize: 11, opacity: 0.7 }}>
           {l.path}:{start}
