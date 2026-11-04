@@ -21,7 +21,8 @@ import { createServer, type Plugin } from "vite";
 import { defaultBase, isRepoFile } from "./git.ts";
 import type { Graph } from "../shared/graph.ts";
 import { cutFor, EMPTY_CUT } from "./hunks.ts";
-import { createTables, currentBranch, isBranch, mark } from "./review.ts";
+import { createTables } from "./db.ts";
+import { currentBranch, isBranch, mark } from "./review.ts";
 import { z } from "zod";
 import { CodeQuery, MarkRequest } from "../shared/graph-and-code.ts";
 
