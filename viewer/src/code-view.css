@@ -20,3 +20,17 @@
 .code-view-more:hover {
   background: rgba(128, 128, 128, 0.25);
 }
+/* What a location's lines do, above them. */
+.location-text {
+  font-size: 12.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+/* A later location's header, inside a box whose lines ran into its own, at the line it starts on. */
+.code-view-inline {
+  padding: 8px 8px 4px;
+  border-top: 2px dashed rgba(128, 128, 128, 0.45);
+  background: rgba(128, 128, 128, 0.06);
+  font-family: system-ui;
+  white-space: normal;
+}
