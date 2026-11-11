@@ -30,27 +30,29 @@ export type Widen = { above: number; below: number };
  */
 export type Segment = { items: Indexed[]; start: number; end: number; above: number; below: number };
 
+/** The first and last line a box shows: its lines, what ↑ / ↓ added, and the CONTEXT lines the server keeps. */
+const firstShown = (s: Segment) => s.start - s.above - CONTEXT;
+const lastShown = (s: Segment) => s.end + s.below + CONTEXT;
+
 /**
- * A group's locations, run together where their lines meet: a location joins the box before it when the lines that
- * box shows (its locations' lines, what ↑ / ↓ added, and the CONTEXT lines the server keeps) reach the line before
- * the first one the location shows.
+ * A group's locations, run together where their lines meet: a location joins the box before it when no line is hidden
+ * between them, the first line it shows coming right after, or before, the last line that box shows.
  */
 export function blend(group: Indexed[], widen: (index: number) => Widen): Segment[] {
   const segments: Segment[] = [];
   for (const item of group) {
     const { above, below } = widen(item.index);
-    const start = startOf(item.location);
-    const end = item.location.line;
+    const next: Segment = { items: [item], start: startOf(item.location), end: item.location.line, above, below };
     const last = segments.at(-1);
-    if (last && last.end + last.below + CONTEXT + 1 >= start - above - CONTEXT) {
-      // first and last lines shown, before CONTEXT, if this location joins
-      const from = Math.min(last.start - last.above, start - above);
-      const to = Math.max(last.end + last.below, end + below);
+    if (last && firstShown(next) <= lastShown(last) + 1) {
+      // the box's first and last line shown, before CONTEXT, once this location joins
+      const from = Math.min(last.start - last.above, next.start - above);
+      const to = Math.max(last.end + last.below, next.end + below);
       last.items.push(item);
-      last.end = Math.max(last.end, end);
+      last.end = Math.max(last.end, next.end);
       last.above = last.start - from;
       last.below = to - last.end;
-    } else segments.push({ items: [item], start, end, above, below });
+    } else segments.push(next);
   }
   return segments;
 }
