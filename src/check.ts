@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { Graph, Location } from "../shared/graph.ts";
 import { getChanges, hashLines, ownRows, splitLines } from "./hunks.ts";
+import { onGraph, placeInGraph, type GraphAnchor, type Misplaced } from "./place.ts";
+import type { Thread } from "../shared/thread.ts";
 
 /** Reads a file's contents on one side of the diff; undefined if it doesn't exist there. */
 export type ReadFile = (side: Location["side"], path: string) => string | undefined;
@@ -93,4 +95,26 @@ export function checkIds(graph: Graph): IdProblem[] {
         ? [{ ...x, reason: "duplicate" as const }]
         : [],
   );
+}
+
+export type ThreadProblem = {
+  thread: Thread;
+  reason: Misplaced;
+  /** The characters at the anchor's start..end now, as far as its text has them; undefined when it has no text. */
+  now?: string;
+};
+
+/** Whether graph check checks a thread: one not dropped, anchored on the graph's text or its code. */
+export const isChecked = (thread: Thread): thread is Thread & { anchor: GraphAnchor } => !thread.dropped && onGraph(thread.anchor);
+
+/**
+ * Every thread, not dropped, anchored on the graph's text or its code, that isn't in place in this graph and these
+ * files. Threads anchored in other threads aren't checked.
+ */
+export function checkThreads(threads: Thread[], graph: Graph, read: ReadFile): ThreadProblem[] {
+  return threads.flatMap((thread): ThreadProblem[] => {
+    if (!isChecked(thread)) return [];
+    const placed = placeInGraph(thread.anchor, graph, read);
+    return placed.ok ? [] : [{ thread, reason: placed.reason, now: placed.now }];
+  });
 }

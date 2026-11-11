@@ -1,7 +1,8 @@
 // The viewer as a user meets it: `node src/view.ts graph.json` on a real repo, in a real browser.
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
-import { clearReview, createTables } from "../src/review.ts";
+import { createTables } from "../src/db.ts";
+import { clearReview } from "../src/review.ts";
 import type { Graph } from "../shared/graph.ts";
 import { tempRepo } from "../test/temp-repo.ts";
 import { hashLines } from "../src/hunks.ts";

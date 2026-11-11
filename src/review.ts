@@ -5,28 +5,10 @@
 // base changed, doesn't.
 //
 // Each review has its own state, usually named after the branch being
-// reviewed: the rows with its name in a SQLite database in the repo's common
-// git dir, one row per hash, so worktrees share it and git never pushes it.
-import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+// reviewed: the rows with its name in unvibed's database (db.ts), one row per
+// hash.
+import { db } from "./db.ts";
 import { git } from "./git.ts";
-
-let db: DatabaseSync;
-
-/** Opens unvibed's database in the repo's common git dir and creates its tables if they don't exist yet. */
-export function createTables(): void {
-  const dir = git("rev-parse", "--path-format=absolute", "--git-common-dir").trim();
-  // Waits up to 5s for another viewer's write to finish rather than failing at once.
-  db = new DatabaseSync(join(dir, "unvibed.sqlite"), { timeout: 5000 });
-  // Schema versioning is deferred.
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS reviewed (
-      review TEXT NOT NULL,
-      hash TEXT NOT NULL,
-      PRIMARY KEY (review, hash)
-    ) WITHOUT ROWID
-  `);
-}
 
 /** The current branch, which names a review unless another name is given; undefined if no branch is checked out. */
 export function currentBranch(): string | undefined {
