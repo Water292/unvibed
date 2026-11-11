@@ -18,6 +18,11 @@ run = "npx vitest run"
 description = "Run the browser tests: the viewer in Chromium, on a repo each test file builds"
 run = "npx playwright test"
 
+[tasks.perf]
+description = "Report how fast a big graph opens, against its targets; not part of e2e or check"
+env = { PERF = "1" }
+run = "npx playwright test e2e/perf.spec.ts"
+
 [tasks.check]
 description = "Everything CI checks"
 depends = ["typecheck", "test", "e2e"]
