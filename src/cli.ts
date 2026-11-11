@@ -8,8 +8,9 @@
 // stores, and prints what they should be where they don't match; and checks
 // that every node, edge and location has its own UUID. With --review, it also
 // checks that each of that review's threads anchored on the graph's text or
-// its code is still in place, and prints what's needed to move or drop each
-// one that isn't.
+// its code is still in place; for each one that isn't, it prints where the
+// thread was, what's there now and what it asked, for whoever rewrote the
+// graph to decide whether to move or drop it.
 // LEFT locations and code are read at --base (default: merge-base of
 // origin/main and HEAD), RIGHT ones at --head (default: the working tree).
 //
