@@ -1,6 +1,6 @@
 // Review state: the hashes of the code marked reviewed, each the hash of a
 // location's own rows of the diff, removed lines included, without line
-// numbers (see cutFor). A location is reviewed when its hash is one of them,
+// numbers (see codeFor). A location is reviewed when its hash is one of them,
 // so moved code stays reviewed, and changed or re-cut code, or code whose
 // base changed, doesn't.
 //

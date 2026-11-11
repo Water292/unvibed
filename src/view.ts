@@ -4,8 +4,8 @@
 //
 // Starts Vite's development server (hot reload included) and answers
 // /graph.json with the chosen file, which can be anywhere on disk.
-// /code?path=&side=&start=&end=[&above=&below=] answers with those lines of a
-// file in the repo, diffed between --base (default: merge-base of origin/main
+// /code?path=&side=&at=start,end,above,below[&at=...] answers with those
+// locations' lines of a file in the repo, as code boxes, diffed between --base (default: merge-base of origin/main
 // and HEAD) and --head (default: the working tree), read when asked, and
 // whether they're marked reviewed in this review: the one --review names,
 // else the branch --head names, else the branch checked out at startup.
@@ -20,7 +20,7 @@ import { parseArgs } from "node:util";
 import { createServer, type Plugin } from "vite";
 import { defaultBase, isRepoFile } from "./git.ts";
 import type { Graph } from "../shared/graph.ts";
-import { cutFor, EMPTY_CUT } from "./hunks.ts";
+import { codeFor, emptyAnswer } from "./hunks.ts";
 import { createTables, currentBranch, isBranch, mark } from "./review.ts";
 import { z } from "zod";
 import { CodeQuery, MarkRequest } from "../shared/graph-and-code.ts";
@@ -93,20 +93,19 @@ const serveGraph: Plugin = {
         res.end(branchChange);
         return;
       }
-      const query = CodeQuery.safeParse(Object.fromEntries(new URL(req.url ?? "", `http://${req.headers.host}`).searchParams));
+      const params = new URL(req.url ?? "", `http://${req.headers.host}`).searchParams;
+      const query = CodeQuery.safeParse({ path: params.get("path"), side: params.get("side"), at: params.getAll("at") });
       if (!query.success) {
         res.statusCode = 400;
         res.end(z.prettifyError(query.error));
         return;
       }
-      const { path: file, side, start, end, above, below } = query.data;
+      const { path: file, side, at } = query.data;
       try {
-        // only a file in the repo on that side is read; for anything else, an empty cut, as for a file that can't be read
-        const cut = isRepoFile(side === "LEFT" ? base : head, file)
-          ? cutFor(file, side, start, end, above, below, base, head, review)
-          : EMPTY_CUT;
+        // only a file in the repo on that side is read; for anything else, an empty box, as for a file that can't be read
+        const answer = isRepoFile(side === "LEFT" ? base : head, file) ? codeFor(file, side, at, base, head, review) : emptyAnswer(at.length);
         res.setHeader("content-type", "application/json");
-        res.end(JSON.stringify(cut));
+        res.end(JSON.stringify(answer));
       } catch (e) {
         res.statusCode = 500;
         res.end(`can't read the code: ${(e as Error).message}`);

@@ -3,7 +3,7 @@
 // reviewed box on each location.
 import { useState, type PointerEvent } from "react";
 import type { Graph, Node } from "../../shared/graph.ts";
-import { groupLocations } from "./blend.ts";
+import { groupLocations } from "./group.ts";
 import { LocationGroup } from "./code-view.tsx";
 import { ViewType } from "./view-type.ts";
 

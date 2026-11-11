@@ -58,21 +58,22 @@ test("each location's explanation is above its lines; ↓ runs the two into one 
   const top = async (text: string) => (await panel.getByText(text).boundingBox())!.y;
   expect(await top("Five, shouted.")).toBeLessThan(await top("Forty, shouted."));
 
-  // ↓ once: line 5 shows to line 28, line 40 from 37; still two boxes.
+  // ↓ once: line 5's box showed to line 8, and now shows 20 lines past that and the unchanged lines after, to 31;
+  // line 40's shows from 37, so line 32 to 36 are between them: still two boxes.
   await boxes.nth(0).getByRole("button", { name: "↓" }).click();
-  await expect(boxes.nth(0)).toContainText("line 28");
+  await expect(boxes.nth(0)).toContainText("line 31");
   await expect(boxes).toHaveCount(2);
 
-  // ↓ again: line 5 would show to 48, past where line 40's lines start, so the two are one box: line 40's header
-  // sits inside it, under line 39, and the box shows 20 more lines below line 40, as far as line 5's ↓ reached.
+  // ↓ again: line 5's lines reach past where line 40's start, so the two are one box: line 40's header sits inside
+  // it, under line 39, and the box shows as far as line 5's ↓ reached, line 54.
   await boxes.nth(0).getByRole("button", { name: "↓" }).click();
   await expect(boxes).toHaveCount(1);
   const inline = boxes.locator(".code-view-inline");
   await expect(inline).toContainText("long.txt:40 (head)");
   await expect(inline).toContainText("Forty, shouted.");
   await expect(inline.locator("xpath=ancestor::tr/preceding-sibling::tr[1]")).toContainText("line 39");
-  await expect(boxes).toContainText("line 48");
-  await expect(boxes).not.toContainText("line 49");
+  await expect(boxes).toContainText("line 54");
+  await expect(boxes.getByText("line 55", { exact: true })).toHaveCount(0);
 
   // Each location is still ticked on its own.
   await expect(reviewed).toHaveCount(2);

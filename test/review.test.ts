@@ -4,7 +4,7 @@ import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, expect, test } from "vitest";
 import { check } from "../src/check.ts";
-import { cutFor } from "../src/hunks.ts";
+import { codeFor } from "../src/hunks.ts";
 import { gitWithInput, show } from "../src/git.ts";
 import { MarkRequest } from "../shared/graph-and-code.ts";
 import { createTables, currentBranch, isReviewed, mark } from "../src/review.ts";
@@ -58,7 +58,7 @@ const createLocation = (firstLine: number, lastLine: number, path = "f.ts", side
 
 /** What the page gets for a location, against a base: its hash, and whether it's reviewed. */
 function getLocationView(loc: Location, from = base) {
-  return cutFor(loc.path, loc.side, loc.start_line ?? loc.line, loc.line, 0, 0, from, undefined, REVIEW);
+  return codeFor(loc.path, loc.side, [{ start: loc.start_line ?? loc.line, end: loc.line, above: 0, below: 0 }], from, undefined, REVIEW).own[0]!;
 }
 
 /** Ticks a location as the page does, by its hash. */
@@ -124,9 +124,9 @@ test("base-side code (deleted lines) and files git doesn't track yet can be mark
 test("widening a location with ↑ / ↓ keeps its hash, so its mark holds", () => {
   writeLines("f.ts", ["A", "b", "c", "d", "e"]); // the PR also changes line 1, which widening reaches
   const { hash } = getLocationView(createLocation(4, 5));
-  const widened = cutFor("f.ts", "RIGHT", 4, 5, 20, 20, base, undefined, REVIEW);
-  expect(widened.diff).toContain("+A"); // the other change is in the widened code
-  expect(widened.hash).toBe(hash);
+  const widened = codeFor("f.ts", "RIGHT", [{ start: 4, end: 5, above: 20, below: 20 }], base, undefined, REVIEW);
+  expect(widened.boxes[0]!.diff).toContain("+A"); // the other change is in the widened code
+  expect(widened.own[0]!.hash).toBe(hash);
 });
 
 test("lines that can't be read have no hash, so nothing can be marked for them", () => {
