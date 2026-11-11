@@ -1,6 +1,6 @@
 // How fast a big graph opens: the page drawing every box, and the server answering each location's code. Each test
-// reports what it measured, per box and per location so the numbers stay comparable at any graph size; it fails only
-// if the page or the server doesn't work, never on time.
+// reports what it measured, per box and per location so the numbers stay comparable at any graph size, and flags it
+// as a regression when it's past its target. It fails only if the page or the server doesn't work, never on time.
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { diffOf } from "../src/check.ts";
@@ -13,6 +13,19 @@ const FILES = 20;
 const NODES = 200;
 /** Locations whose code is timed, one after another. */
 const TIMED_LOCATIONS = 10;
+/** Targets, about half again what each takes on an M-series Mac: milliseconds per box drawn (about 1), and for one
+ * location's code (about 80-100). */
+const LOAD_TARGET_PER_BOX = 1.5;
+const CODE_TARGET_PER_LOCATION = 150;
+
+/** Prints a measurement, and flags it as a regression, in the output and in the test's report, if it's past its target. */
+function report(what: string, ms: number, target: number) {
+  console.log(`${what}: ${ms.toFixed(2)}ms (target ${target}ms)`);
+  if (ms <= target) return;
+  const regression = `${what} regressed: ${ms.toFixed(2)}ms, past its ${target}ms target`;
+  console.warn(`⚠ ${regression}`);
+  test.info().annotations.push({ type: "perf regression", description: regression });
+}
 
 // f<n>.ts at the base: 100 lines, one constant each. The head changes every tenth line, from line 5 on, so a file has
 // 10 changes, 10 lines apart.
@@ -58,7 +71,8 @@ test(`how long a graph of ${NODES} nodes takes to draw every box`, async ({ page
   await page.reload();
   // performance.now() counts from the start of this page's navigation
   const ms = (await (await page.waitForFunction(allDrawn, NODES)).jsonValue()) as number;
-  console.log(`every box drawn in ${Math.round(ms)}ms, ${(ms / NODES).toFixed(2)}ms a box`);
+  console.log(`every box drawn in ${Math.round(ms)}ms`);
+  report("drawing a box", ms / NODES, LOAD_TARGET_PER_BOX);
 });
 
 test("how long the server takes to answer one location's code", async () => {
@@ -74,4 +88,5 @@ test("how long the server takes to answer one location's code", async () => {
   }
   times.sort((a, b) => a - b);
   console.log(`a location's code in ${Math.round(times[times.length >> 1]!)}ms (median), ${Math.round(times.at(-1)!)}ms (slowest)`);
+  report("a location's code (slowest)", times.at(-1)!, CODE_TARGET_PER_LOCATION);
 });
