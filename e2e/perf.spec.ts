@@ -13,8 +13,9 @@ const FILES = 20;
 const NODES = 200;
 /** Locations whose code is timed, one after another. */
 const TIMED_LOCATIONS = 10;
-/** Targets, about half again what each takes on an M-series Mac: milliseconds per box drawn (about 1), and for one
- * location's code (about 80-100). */
+/** Targets, about half again what each takes on an M-series Mac: milliseconds to draw the whole graph (about 200)
+ * and per box drawn (about 1), and for one location's code (about 80-100). */
+const LOAD_TARGET = 300;
 const LOAD_TARGET_PER_BOX = 1.5;
 const CODE_TARGET_PER_LOCATION = 150;
 
@@ -71,7 +72,7 @@ test(`how long a graph of ${NODES} nodes takes to draw every box`, async ({ page
   await page.reload();
   // performance.now() counts from the start of this page's navigation
   const ms = (await (await page.waitForFunction(allDrawn, NODES)).jsonValue()) as number;
-  console.log(`every box drawn in ${Math.round(ms)}ms`);
+  report(`drawing the whole graph of ${NODES} boxes`, ms, LOAD_TARGET);
   report("drawing a box", ms / NODES, LOAD_TARGET_PER_BOX);
 });
 
