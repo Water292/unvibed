@@ -1,7 +1,7 @@
 // A node's locations in one file, each with its explanation, run into one box as ↓ widens the first to the second.
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
-import type { Graph } from "../shared/graph.ts";
+import type { Graph, Location } from "../shared/graph.ts";
 import { tempRepo } from "../test/temp-repo.ts";
 import { hashLines } from "../src/hunks.ts";
 import { startViewer } from "./start-viewer.ts";
@@ -11,40 +11,67 @@ const lines = Array.from({ length: 60 }, (_, i) => `line ${i + 1}`);
 const BASE = lines.join("\n") + "\n";
 const HEAD = BASE.replace("line 5\n", "LINE FIVE\n").replace("line 40\n", "LINE FORTY\n");
 
-const changed = (line: number, before: string, after: string, text: string) =>
-  ({ id: randomUUID(), path: "long.txt", side: "RIGHT" as const, line, hash: hashLines([`-${before}`, `+${after}`]), added: 1, removed: 1, text });
+// The places the nodes point at. Each is a function because every location in a graph needs its own id, so a node
+// gets its own copy. A location's hash is of its own rows: each line removed, marked -, then each line added, marked +.
+
+/** Line 5 after the change. */
+const five = (): Location => ({
+  id: randomUUID(),
+  path: "long.txt",
+  side: "RIGHT",
+  line: 5,
+  hash: hashLines(["-line 5", "+LINE FIVE"]),
+  added: 1,
+  removed: 1,
+  text: "Five, shouted.",
+});
+
+/** Line 40 after the change. */
+const forty = (): Location => ({
+  id: randomUUID(),
+  path: "long.txt",
+  side: "RIGHT",
+  line: 40,
+  hash: hashLines(["-line 40", "+LINE FORTY"]),
+  added: 1,
+  removed: 1,
+  text: "Forty, shouted.",
+});
+
+/** Line 40 before the change: the line the change removed. */
+const oldForty = (): Location => ({
+  id: randomUUID(),
+  path: "long.txt",
+  side: "LEFT",
+  line: 40,
+  hash: hashLines(["-line 40"]),
+  added: 0,
+  removed: 1,
+  text: "The old forty, gone.",
+});
+
+/** Line 1 of short.txt after the change. */
+const shortA = (): Location => ({
+  id: randomUUID(),
+  path: "short.txt",
+  side: "RIGHT",
+  line: 1,
+  hash: hashLines(["-a", "+A"]),
+  added: 1,
+  removed: 1,
+  text: "A, shouted.",
+});
+
 const NODE_UUID = randomUUID();
 const BOTH_SIDES_UUID = randomUUID();
 const TWO_FILES_UUID = randomUUID();
 const graph: Graph = {
   schema: "test",
   nodes: [
-    {
-      id: NODE_UUID,
-      title: "two changes",
-      text: "",
-      // listed last line first: the panel shows them in the file's order
-      code: [changed(40, "line 40", "LINE FORTY", "Forty, shouted."), changed(5, "line 5", "LINE FIVE", "Five, shouted.")],
-    },
-    {
-      id: BOTH_SIDES_UUID,
-      title: "a change, and a line it removed",
-      text: "",
-      // line 5 as it is after the change, and line 40 as it was before
-      code: [
-        changed(5, "line 5", "LINE FIVE", "Five, shouted."),
-        { id: randomUUID(), path: "long.txt", side: "LEFT", line: 40, hash: hashLines(["-line 40"]), added: 0, removed: 1, text: "The old forty, gone." },
-      ],
-    },
-    {
-      id: TWO_FILES_UUID,
-      title: "a change in each of two files",
-      text: "",
-      code: [
-        changed(5, "line 5", "LINE FIVE", "Five, shouted."),
-        { id: randomUUID(), path: "short.txt", side: "RIGHT", line: 1, hash: hashLines(["-a", "+A"]), added: 1, removed: 1, text: "A, shouted." },
-      ],
-    },
+    // listed last line first: the panel shows them in the file's order
+    { id: NODE_UUID, title: "two changes", text: "", code: [forty(), five()] },
+    { id: BOTH_SIDES_UUID, title: "a change, and a line it removed", text: "", code: [five(), oldForty()] },
+    { id: TWO_FILES_UUID, title: "a change in each of two files", text: "", code: [five(), shortA()] },
   ],
   edges: [],
 };
