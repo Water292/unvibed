@@ -7,10 +7,16 @@ import { Flow } from "./react-flow/flow.tsx";
 import { renderLocations } from "./rendered-location.ts";
 import { isViewType, ViewType } from "./view-type.ts";
 
-async function load(): Promise<Graph> {
-  const res = await fetch("/graph.json");
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+/** The graph, and the hashes of the lines already marked reviewed in this review. */
+async function load(): Promise<{ graph: Graph; reviewed: string[] }> {
+  const [graph, reviewed] = await Promise.all(
+    ["/graph.json", "/reviewed"].map(async (url) => {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }),
+  );
+  return { graph, reviewed };
 }
 
 /** Saves a mark; returns the server's message if it fails. */
@@ -54,10 +60,11 @@ function savePanelShare(share: number) {
 
 function App() {
   const [graph, setGraph] = useState<Graph>();
-  // The marks made since the page loaded, by hash: they outrank what a box's code came with, so every box with the
-  // same lines follows a tick, on screen or fetched later.
-  const [marks, setMarks] = useState<ReadonlyMap<string, boolean>>(new Map());
-  const locations = useMemo(() => graph && renderLocations(graph), [graph]);
+  // The hashes marked reviewed: those marked when the page loaded, with each tick since added and each untick removed.
+  // They tick each location, which colours the canvas's nodes and the panel's boxes, so every location with the same
+  // lines follows a tick.
+  const [reviewedHashes, setReviewedHashes] = useState<ReadonlySet<string>>(new Set());
+  const locations = useMemo(() => graph && renderLocations(graph, reviewedHashes), [graph, reviewedHashes]);
   const [error, setError] = useState<string>();
   const [selected, setSelected] = useState<string>();
   const [viewType, setViewType] = useState(savedViewType);
@@ -80,7 +87,7 @@ function App() {
   useEffect(() => {
     let current = true;
     load().then(
-      (g) => current && setGraph(g),
+      ({ graph, reviewed }) => current && (setGraph(graph), setReviewedHashes(new Set(reviewed))),
       (e: Error) => current && setError(e.message),
     );
     return () => {
@@ -94,10 +101,13 @@ function App() {
   // Saves the mark, then records it here, which ticks every location with the same lines. Returns why it couldn't be
   // saved, if it couldn't.
   const onMark = async (hash: string, reviewed: boolean) => {
-    if (!hash) return "these lines can't be read, so they can't be marked";
     const failure = await sendMark({ hash, reviewed });
-    if (failure === undefined) setMarks((m) => new Map(m).set(hash, reviewed));
-    return failure;
+    if (failure !== undefined) return failure;
+    setReviewedHashes((hashes) => {
+      if (reviewed) return new Set([...hashes, hash]);
+      return new Set([...hashes].filter((h) => h !== hash));
+    });
+    return undefined;
   };
   // The panel takes a share of the window, kept as the window is resized: once its edge has been dragged, the
   // share dragged to, for both views; until then each view's default for the window the page opened in.
@@ -105,13 +115,12 @@ function App() {
   const width = clampPanelWidth(Math.round(share * windowWidth), windowWidth);
   return (
     <div style={{ position: "relative", height: "100%" }}>
-      <Flow graph={graph} selected={selected} onSelect={setSelected} covered={node ? width : 0} />
+      <Flow graph={graph} locations={locations} selected={selected} onSelect={setSelected} covered={node ? width : 0} />
       {node && (
         <Panel
           graph={graph}
           node={node}
           locations={locations.get(node.id)!}
-          marks={marks}
           onMark={onMark}
           onSelect={setSelected}
           width={width}

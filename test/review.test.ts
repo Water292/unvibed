@@ -7,7 +7,7 @@ import { check } from "../src/check.ts";
 import { cutFor } from "../src/hunks.ts";
 import { gitWithInput, show } from "../src/git.ts";
 import { MarkRequest } from "../shared/graph-and-code.ts";
-import { createTables, currentBranch, isReviewed, mark } from "../src/review.ts";
+import { createTables, currentBranch, mark, reviewedHashes } from "../src/review.ts";
 import type { Location } from "../shared/graph.ts";
 import { tempRepo } from "./temp-repo.ts";
 
@@ -56,30 +56,33 @@ const createLocation = (firstLine: number, lastLine: number, path = "f.ts", side
   text: "",
 });
 
-/** What the page gets for a location, against a base: its hash, and whether it's reviewed. */
+/** What the page gets for a location, against a base: its code and its hash. */
 function getLocationView(loc: Location, from = base) {
-  return cutFor(loc.path, loc.side, loc.start_line ?? loc.line, loc.line, 0, 0, from, undefined, REVIEW);
+  return cutFor(loc.path, loc.side, loc.start_line ?? loc.line, loc.line, 0, 0, from, undefined);
 }
+
+/** Whether a location, read against a base, is marked reviewed: its hash is one of the review's. */
+const isLocationReviewed = (loc: Location, from = base) => reviewedHashes(REVIEW).includes(getLocationView(loc, from).hash);
 
 /** Ticks a location as the page does, by its hash. */
 const tick = (loc: Location, reviewed = true) => mark(REVIEW, getLocationView(loc).hash, reviewed);
 
 test("marking a location makes it reviewed", () => {
-  expect(getLocationView(createLocation(4, 5)).reviewed).toBe(false);
+  expect(isLocationReviewed(createLocation(4, 5))).toBe(false);
   tick(createLocation(4, 5));
-  expect(getLocationView(createLocation(4, 5)).reviewed).toBe(true);
+  expect(isLocationReviewed(createLocation(4, 5))).toBe(true);
 });
 
 test("code that only moved keeps its mark", () => {
   tick(createLocation(4, 5));
   writeLines("f.ts", ["new", "a", "b", "c", "d", "e"]); // a line added above
-  expect(getLocationView(createLocation(5, 6)).reviewed).toBe(true);
+  expect(isLocationReviewed(createLocation(5, 6))).toBe(true);
 });
 
 test("code that changed loses its mark", () => {
   tick(createLocation(4, 5));
   writeLines("f.ts", ["a", "b", "c", "d", "E"]);
-  expect(getLocationView(createLocation(4, 5)).reviewed).toBe(false);
+  expect(isLocationReviewed(createLocation(4, 5))).toBe(false);
 });
 
 test("code whose base changed loses its mark, though its own lines didn't change", () => {
@@ -88,28 +91,28 @@ test("code whose base changed loses its mark, though its own lines didn't change
   const blob = gitWithInput("a\nb\nX\n", "hash-object", "-w", "--stdin").trim();
   const tree = gitWithInput(`100644 blob ${blob}\tf.ts\n`, "mktree").trim();
   const rebasedBase = repo.git("commit-tree", tree, "-m", "base with c changed");
-  expect(getLocationView(createLocation(3, 5), rebasedBase).reviewed).toBe(false);
+  expect(isLocationReviewed(createLocation(3, 5), rebasedBase)).toBe(false);
 });
 
 test("a location cut differently is reviewed again, even inside what was marked", () => {
   tick(createLocation(3, 5));
-  expect(getLocationView(createLocation(4, 5)).reviewed).toBe(false); // narrower
-  expect(getLocationView(createLocation(2, 5)).reviewed).toBe(false); // wider
+  expect(isLocationReviewed(createLocation(4, 5))).toBe(false); // narrower
+  expect(isLocationReviewed(createLocation(2, 5))).toBe(false); // wider
 });
 
 test("unmarking a location makes it unreviewed again", () => {
   tick(createLocation(4, 5));
   tick(createLocation(4, 5), false);
-  expect(getLocationView(createLocation(4, 5)).reviewed).toBe(false);
+  expect(isLocationReviewed(createLocation(4, 5))).toBe(false);
 });
 
 test("a tick on code that changed after it was shown marks only what was shown", () => {
   const shown = getLocationView(createLocation(4, 5)).hash;
   writeLines("f.ts", ["a", "b", "c", "d", "EDITED"]); // saved after the page showed the code
   mark(REVIEW, shown, true);
-  expect(getLocationView(createLocation(4, 5)).reviewed).toBe(false);
+  expect(isLocationReviewed(createLocation(4, 5))).toBe(false);
   writeLines("f.ts", ["a", "b", "c", "d", "e"]); // back to what was shown
-  expect(getLocationView(createLocation(4, 5)).reviewed).toBe(true);
+  expect(isLocationReviewed(createLocation(4, 5))).toBe(true);
 });
 
 test("base-side code (deleted lines) and files git doesn't track yet can be marked", () => {
@@ -117,14 +120,14 @@ test("base-side code (deleted lines) and files git doesn't track yet can be mark
   writeLines("new.ts", ["x"]);
   tick(createLocation(2, 2, "f.ts", "LEFT"));
   tick(createLocation(1, 1, "new.ts"));
-  expect(getLocationView(createLocation(2, 2, "f.ts", "LEFT")).reviewed).toBe(true);
-  expect(getLocationView(createLocation(1, 1, "new.ts")).reviewed).toBe(true);
+  expect(isLocationReviewed(createLocation(2, 2, "f.ts", "LEFT"))).toBe(true);
+  expect(isLocationReviewed(createLocation(1, 1, "new.ts"))).toBe(true);
 });
 
 test("widening a location with ↑ / ↓ keeps its hash, so its mark holds", () => {
   writeLines("f.ts", ["A", "b", "c", "d", "e"]); // the PR also changes line 1, which widening reaches
   const { hash } = getLocationView(createLocation(4, 5));
-  const widened = cutFor("f.ts", "RIGHT", 4, 5, 20, 20, base, undefined, REVIEW);
+  const widened = cutFor("f.ts", "RIGHT", 4, 5, 20, 20, base, undefined);
   expect(widened.diff).toContain("+A"); // the other change is in the widened code
   expect(widened.hash).toBe(hash);
 });
@@ -145,10 +148,12 @@ test("a graph's hash is the hash marks are made by", () => {
   expect(check(graph, (side, path) => show(side === "LEFT" ? base : undefined, path))).toEqual([]);
 });
 
-test("reviews are kept apart: a mark in one doesn't count in another", () => {
-  tick(createLocation(4, 5));
-  const { hash } = getLocationView(createLocation(4, 5));
-  expect(isReviewed("other", hash)).toBe(false);
+test("a review lists the hashes marked in it, and no others", () => {
+  mark(REVIEW, "a", true);
+  mark(REVIEW, "b", true);
+  mark(REVIEW, "b", false);
+  mark("other", "c", true);
+  expect(reviewedHashes(REVIEW)).toEqual(["a"]);
 });
 
 test("a review is named after the current branch", () => {

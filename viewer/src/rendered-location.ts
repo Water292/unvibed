@@ -1,10 +1,42 @@
-// A location as the page shows it. For now it holds just the graph's location; what the page knows about it beyond
-// the graph goes here.
+// A location as the page shows it: the graph's location and whether it's ticked reviewed, which give its review
+// state. Changed code is yellow until it's ticked, then green; code that didn't change has nothing to review, so it
+// isn't tinted.
 import type { Graph, Location } from "../../shared/graph.ts";
 
-export class RenderedLocation {
-  constructor(readonly location: Location) {}
+export enum ReviewState {
+  Unchanged = "unchanged",
+  NeedsReview = "needs review",
+  Reviewed = "reviewed",
 }
 
-/** Each node's locations, by node id. */
-export const renderLocations = (graph: Graph) => new Map(graph.nodes.map((n) => [n.id, n.code.map((l) => new RenderedLocation(l))]));
+// Translucent, so the same tints work on a light and a dark background.
+export const NEEDS_REVIEW = "rgba(234, 179, 8, 0.25)";
+export const REVIEWED = "rgba(34, 197, 94, 0.22)";
+
+export class RenderedLocation {
+  constructor(
+    readonly location: Location,
+    readonly ticked: boolean,
+  ) {}
+
+  /** Whether it adds or removes any lines, which is what makes it something to review. */
+  get changed() {
+    return this.location.added + this.location.removed > 0;
+  }
+
+  get state(): ReviewState {
+    if (!this.changed) return ReviewState.Unchanged;
+    return this.ticked ? ReviewState.Reviewed : ReviewState.NeedsReview;
+  }
+}
+
+/** Each node's locations, by node id, ticked when the graph's hash for them is one of reviewedHashes. */
+export const renderLocations = (graph: Graph, reviewedHashes: ReadonlySet<string>) =>
+  new Map(graph.nodes.map((n) => [n.id, n.code.map((l) => new RenderedLocation(l, reviewedHashes.has(l.hash)))]));
+
+const TINTS: Record<ReviewState, string | undefined> = {
+  [ReviewState.Unchanged]: undefined,
+  [ReviewState.NeedsReview]: NEEDS_REVIEW,
+  [ReviewState.Reviewed]: REVIEWED,
+};
+export const tint = (state: ReviewState) => TINTS[state];

@@ -18,10 +18,9 @@ export const CodeQuery = z
 /**
  * One location's code, as /code answers: its lines as unified diff text (empty when the file can't be read on the
  * location's side), whether the file has lines beyond them, above and below, the hash of the location's own rows
- * (empty if there's nothing in its range), which marks are made by, and whether those rows are marked reviewed.
- * Widening never changes the hash.
+ * (empty if there's nothing in its range), which marks are made by. Widening never changes the hash.
  */
-export type CodeCut = { diff: string; moreAbove: boolean; moreBelow: boolean; hash: string; reviewed: boolean };
+export type CodeCut = { diff: string; moreAbove: boolean; moreBelow: boolean; hash: string };
 
 /** Marks the lines with this hash reviewed, or not. The server checks each request against it. */
 export const MarkRequest = z.object({ hash: z.string().min(1), reviewed: z.boolean() });
