@@ -234,16 +234,12 @@ test.describe("marking code reviewed", () => {
     await expect(locationBox()).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   });
 
-  test("ticking code that changed after the page showed it marks the lines on screen", async ({ page }) => {
-    await openBox(page, GREET_UUID, greetLineInPr);
-    // Saved while the page still shows the old line.
+  test("a tick is by the graph's hash for the location, so it holds whatever the file shows now", async ({ page }) => {
+    // The file no longer matches the graph: the box shows the edited line, but is ticked by the graph's lines.
     repo.write("app.ts", appWithEditedGreet);
+    await openBox(page, GREET_UUID, editedGreetLine);
     await getReviewedCheckbox(page).click();
     await expect(getReviewedCheckbox(page)).toBeChecked();
-
-    // After a reload the page shows the new line, which wasn't ticked.
-    await openBox(page, GREET_UUID, editedGreetLine);
-    await expect(getReviewedCheckbox(page)).not.toBeChecked();
 
     repo.write("app.ts", HEAD);
     await openBox(page, GREET_UUID, greetLineInPr);

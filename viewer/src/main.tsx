@@ -61,8 +61,8 @@ function savePanelShare(share: number) {
 function App() {
   const [graph, setGraph] = useState<Graph>();
   // The marks by hash: every hash marked reviewed when the page loaded, then the marks made since. They tick each
-  // location, which colours the canvas's nodes and the panel's boxes, and outrank what a box's code came with, so
-  // every box with the same lines follows a tick, on screen or fetched later.
+  // location by the graph's hash for it, which colours the canvas's nodes and the panel's boxes, so every location
+  // with the same lines follows a tick.
   const [marks, setMarks] = useState<ReadonlyMap<string, boolean>>(new Map());
   const locations = useMemo(() => graph && renderLocations(graph, marks), [graph, marks]);
   const [error, setError] = useState<string>();
@@ -101,7 +101,6 @@ function App() {
   // Saves the mark, then records it here, which ticks every location with the same lines. Returns why it couldn't be
   // saved, if it couldn't.
   const onMark = async (hash: string, reviewed: boolean) => {
-    if (!hash) return "these lines can't be read, so they can't be marked";
     const failure = await sendMark({ hash, reviewed });
     if (failure === undefined) setMarks((m) => new Map(m).set(hash, reviewed));
     return failure;
@@ -118,7 +117,6 @@ function App() {
           graph={graph}
           node={node}
           locations={locations.get(node.id)!}
-          marks={marks}
           onMark={onMark}
           onSelect={setSelected}
           width={width}
