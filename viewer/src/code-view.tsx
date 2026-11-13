@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import "./code-view.css";
 import type { CodeCut } from "../../shared/graph-and-code.ts";
 import type { Location } from "../../shared/graph.ts";
+import type { RenderedLocation } from "./rendered-location.ts";
 import { ViewType } from "./view-type.ts";
 
 const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
@@ -49,7 +50,7 @@ async function fetchCut(l: Location, above: number, below: number): Promise<Code
  * if it couldn't.
  */
 type Props = {
-  location: Location;
+  location: RenderedLocation;
   viewType: ViewType;
   marks: ReadonlyMap<string, boolean>;
   onReviewed: (hash: string, reviewed: boolean) => void;
@@ -57,7 +58,8 @@ type Props = {
 };
 
 /** The box keeps how many lines ↑ and ↓ have added (above, below) and shows the code it has until a wider cut arrives. */
-export function CodeView({ location: l, viewType, marks, onReviewed, failure }: Props) {
+export function CodeView({ location, viewType, marks, onReviewed, failure }: Props) {
+  const l = location.location;
   const dark = useDarkMode();
   const [above, setAbove] = useState(0);
   const [below, setBelow] = useState(0);
