@@ -93,7 +93,8 @@ const graph: Graph = {
       id: TWO_FILES_UUID,
       title: "a change in each of two files",
       text: "",
-      code: [createLineFiveLocation(), createShortFileLocation()],
+      // short.txt named first, though long.txt comes first by name: the panel keeps the node's order
+      code: [createShortFileLocation(), createLineFiveLocation()],
     },
   ],
   edges: [],
@@ -185,13 +186,14 @@ test("a line from before the change and one from after are one box once their li
   await expect(panel.getByRole("checkbox", { name: "reviewed" })).toHaveCount(2);
 });
 
-test("places in two files are two boxes, each under its own file", async ({ page }) => {
+test("places in two files are two boxes, each under its own file, in the order the node first names the files", async ({ page }) => {
   await page.goto(viewer.url);
   await page.locator(`.react-flow__node[data-id="${TWO_FILES_UUID}"]`).click();
   const panel = page.locator("aside");
   const boxes = panel.locator(".code-view");
   await expect(boxes).toHaveCount(2);
-  await expect(boxes.nth(0)).toContainText("LINE FIVE");
-  await expect(boxes.nth(1)).toContainText("A");
+  await expect(boxes.nth(0)).toContainText("A");
+  await expect(boxes.nth(0)).not.toContainText("LINE FIVE");
+  await expect(boxes.nth(1)).toContainText("LINE FIVE");
   await expect(panel.getByText("short.txt:1 (head)")).toBeVisible();
 });

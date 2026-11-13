@@ -7,12 +7,20 @@ import type { Location } from "../../shared/graph.ts";
 export const startOf = (l: Location) => l.start_line ?? l.line;
 
 /**
- * A node's locations, split by file. In: the node's locations, in its order. Out: one entry per file, in the order
- * the node first names each file, holding that file's locations in the node's order. The server puts a group's
- * locations in the order they come in the file.
+ * A node's locations, split by file. In: the node's locations. Out: one entry per file, holding that file's
+ * locations, the files sorted by where the node first names each. A file's locations can be in any order: the
+ * server puts them in the order they come in the file.
  */
 export function groupLocationsByFile(code: Location[]): { path: string; locations: Location[] }[] {
-  // Map.groupBy puts each location under its path in one pass; a Map keeps its paths in the order they were first added
-  const locationsByPath = Map.groupBy(code, (location) => location.path);
-  return [...locationsByPath].map(([path, locations]) => ({ path, locations }));
+  // each location with its position in the node's list, put under its file
+  const placedByPath = Map.groupBy(
+    code.map((location, position) => ({ location, position })),
+    ({ location }) => location.path,
+  );
+  const groups = [...placedByPath].map(([path, placed]) => ({
+    path,
+    locations: placed.map(({ location }) => location),
+    firstPosition: Math.min(...placed.map(({ position }) => position)),
+  }));
+  return groups.toSorted((a, b) => a.firstPosition - b.firstPosition).map(({ path, locations }) => ({ path, locations }));
 }
