@@ -102,17 +102,13 @@ test("dark mode: the canvas, the panel and the code follow the system", async ({
   await expect(panel(page)).toContainText('return "hi " + name;');
   const brightness = (selector: string) =>
     page.locator(selector).first().evaluate((el) => {
-      // the colour that shows behind the element: its own background and its ancestors', each translucent one (a
-      // tint) laid over the ones below it, down to the nearest opaque one, or white
-      const layers: number[][] = [];
+      // the colour behind the element: its own background, else the nearest ancestor's that's opaque (a translucent
+      // one, such as a location's tint, is skipped: it lets the colour below show through)
       for (let e: Element | null = el; e; e = e.parentElement) {
         const [r, g, b, a = 1] = getComputedStyle(e).backgroundColor.match(/[\d.]+/g)!.map(Number);
-        if (a > 0) layers.push([r!, g!, b!, a]);
-        if (a === 1) break;
+        if (a === 1) return (r! + g! + b!) / 3;
       }
-      let shown = [255, 255, 255];
-      for (const [r, g, b, a] of layers.reverse()) shown = [r!, g!, b!].map((c, i) => c * a! + shown[i]! * (1 - a!));
-      return (shown[0]! + shown[1]! + shown[2]!) / 3;
+      return 255;
     });
   expect(await brightness(".react-flow")).toBeLessThan(80);
   expect(await brightness("aside")).toBeLessThan(80);
