@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from "react";
 import "./code-view.css";
 import type { CodeAnswer, CodeBox, Own } from "../../shared/graph-and-code.ts";
 import type { Location } from "../../shared/graph.ts";
-import { startOf, type Indexed } from "./group.ts";
+import { startOf } from "./group.ts";
 import { ViewType } from "./view-type.ts";
 
 const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
@@ -46,35 +46,36 @@ const sideName = (side: Location["side"]) => (side === "LEFT" ? "base" : "head")
 /** How many lines ↑ (above) and ↓ (below) have added to a location. */
 type Widen = { above: number; below: number };
 
-/** A location in a box: where it is in the node's list, and its own lines as read with the box. */
-type Shown = Indexed & { own: Own };
+/** A location in a box, and its own lines as read with the box. */
+type Shown = { location: Location; own: Own };
 
 /**
- * group: a node's locations in one file (groupLocations). marks: the marks made since the page loaded, by
+ * path, locations: a file, and a node's locations in it (groupLocationsByFile). marks: the marks made since the page loaded, by
  * hash; a location's box is ticked by its code's hash there, else by what its code came with. onReviewed: called
- * with the location's index and that hash when its box is ticked or cleared. failure: why the last tick couldn't be
+ * with the location's id and that hash when its box is ticked or cleared. failure: why the last tick couldn't be
  * saved, and for which location, if it couldn't.
  */
 type Props = {
-  group: Indexed[];
+  path: string;
+  locations: Location[];
   viewType: ViewType;
   marks: ReadonlyMap<string, boolean>;
-  onReviewed: (index: number, hash: string, reviewed: boolean) => void;
-  failure: { index: number; message: string } | undefined;
+  onReviewed: (locationId: string, hash: string, reviewed: boolean) => void;
+  failure: { locationId: string; message: string } | undefined;
 };
 
 /** A file's locations in one node: how many lines ↑ and ↓ have added to each, and the boxes the server cuts them into. */
-export function LocationGroup({ group, ...rest }: Props) {
-  const { path } = group[0]!.location;
-  const [widened, setWidened] = useState<ReadonlyMap<number, Widen>>(new Map());
-  const widen = (i: number) => widened.get(i) ?? { above: 0, below: 0 };
-  // change how far location i is widened, from how far it was last asked for
-  const update = (i: number, change: (w: Widen) => Widen) =>
-    setWidened((m) => new Map([...m, [i, change(m.get(i) ?? { above: 0, below: 0 })]]));
+export function LocationGroup({ path, locations, ...rest }: Props) {
+  // how far each location is widened, by its id
+  const [widened, setWidened] = useState<ReadonlyMap<string, Widen>>(new Map());
+  const widen = (locationId: string) => widened.get(locationId) ?? { above: 0, below: 0 };
+  // change how far a location is widened, from how far it was last asked for
+  const update = (locationId: string, change: (w: Widen) => Widen) =>
+    setWidened((m) => new Map([...m, [locationId, change(m.get(locationId) ?? { above: 0, below: 0 })]]));
   // what's on screen stays there until the answer for a wider request arrives
   const [answer, setAnswer] = useState<CodeAnswer>();
   const [error, setError] = useState<string>();
-  const ats = group.map(({ location: l, index }) => [l.side, startOf(l), l.line, widen(index).above, widen(index).below].join(","));
+  const ats = locations.map((l) => [l.side, startOf(l), l.line, widen(l.id).above, widen(l.id).below].join(","));
   const request = ats.join(" ");
   useEffect(() => {
     let current = true; // a newer request replaces this one's answer
@@ -95,13 +96,13 @@ export function LocationGroup({ group, ...rest }: Props) {
       {error && <div style={{ fontSize: 12, opacity: 0.7, marginTop: 16 }}>{error}</div>}
       {answer?.boxes.map((box) => {
         // the box's locations, in the order they come in the file; the server names them by their place in the request
-        const items = box.items.map((i): Shown => ({ ...group[i]!, own: answer.own[i]! }));
+        const items = box.items.map((i): Shown => ({ location: locations[i]!, own: answer.own[i]! }));
         const first = items[0]!;
         const last = items.at(-1)!;
         return (
           <BoxView
             // a box keeps its first location as it takes in the next ones, so it keeps its place on screen
-            key={first.index}
+            key={first.location.id}
             box={box}
             items={items}
             path={path}
@@ -109,9 +110,9 @@ export function LocationGroup({ group, ...rest }: Props) {
             // version of the file; and at least STEP past what was last asked for, so a click before the answer to
             // the one before still adds lines
             onUp={() =>
-              update(first.index, (w) => ({ ...w, above: Math.max(w.above, startOf(first.location) - box.from[first.location.side]) + STEP }))
+              update(first.location.id, (w) => ({ ...w, above: Math.max(w.above, startOf(first.location) - box.from[first.location.side]) + STEP }))
             }
-            onDown={() => update(last.index, (w) => ({ ...w, below: Math.max(w.below, box.to[last.location.side] - last.location.line) + STEP }))}
+            onDown={() => update(last.location.id, (w) => ({ ...w, below: Math.max(w.below, box.to[last.location.side] - last.location.line) + STEP }))}
             {...rest}
           />
         );
@@ -120,19 +121,19 @@ export function LocationGroup({ group, ...rest }: Props) {
   );
 }
 
-type BoxProps = Omit<Props, "group"> & { box: CodeBox; items: Shown[]; path: string; onUp: () => void; onDown: () => void };
+type BoxProps = Omit<Props, "locations"> & { box: CodeBox; items: Shown[]; onUp: () => void; onDown: () => void };
 
 /** One box: one location's lines, or several that met, with each location's header. */
 function BoxView({ box, items, path, onUp, onDown, viewType, marks, onReviewed, failure }: BoxProps) {
   const dark = useDarkMode();
   const header = (item: Shown) => (
     <LocationHeader
-      key={item.index}
+      key={item.location.id}
       location={item.location}
       own={item.own}
       marks={marks}
-      onReviewed={(hash, r) => onReviewed(item.index, hash, r)}
-      failure={failure?.index === item.index ? failure.message : undefined}
+      onReviewed={(hash, r) => onReviewed(item.location.id, hash, r)}
+      failure={failure?.locationId === item.location.id ? failure.message : undefined}
     />
   );
   const first = items[0]!;
@@ -153,7 +154,7 @@ function BoxView({ box, items, path, onUp, onDown, viewType, marks, onReviewed, 
         Object.entries(Object.groupBy(inline.filter((s) => s.location.side === side), above)).map(([line, data]) => [line, { data: data! }]),
       );
     return { oldFile: rows("LEFT"), newFile: rows("RIGHT") };
-  }, [inline.map((s) => `${s.index}:${s.own.hash}:${s.own.reviewed}`).join(" ")]);
+  }, [inline.map((s) => `${s.location.id}:${s.own.hash}:${s.own.reviewed}`).join(" ")]);
   return (
     <div style={{ marginTop: 16 }}>
       {top.map(header)}

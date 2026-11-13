@@ -6,16 +6,13 @@ import type { Location } from "../../shared/graph.ts";
 
 export const startOf = (l: Location) => l.start_line ?? l.line;
 
-/** One of the node's locations, with where it is in the node's list. */
-export type Indexed = { location: Location; index: number };
-
 /**
- * A node's locations by file, in the order the node first mentions each file, each group in the node's order. The
- * server puts a group's locations in the order they come in the file.
+ * A node's locations, split by file. In: the node's locations, in its order. Out: one entry per file, in the order
+ * the node first names each file, holding that file's locations in the node's order. The server puts a group's
+ * locations in the order they come in the file.
  */
-export function groupLocations(code: Location[]): Indexed[][] {
-  const indexed = code.map((location, index) => ({ location, index }));
-  // a Set keeps each path once, where it first appears
-  const paths = [...new Set(code.map((l) => l.path))];
-  return paths.map((path) => indexed.filter(({ location }) => location.path === path));
+export function groupLocationsByFile(code: Location[]): { path: string; locations: Location[] }[] {
+  // Map.groupBy puts each location under its path in one pass; a Map keeps its paths in the order they were first added
+  const locationsByPath = Map.groupBy(code, (location) => location.path);
+  return [...locationsByPath].map(([path, locations]) => ({ path, locations }));
 }

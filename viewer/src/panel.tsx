@@ -3,7 +3,7 @@
 // reviewed box on each location.
 import { useState, type PointerEvent } from "react";
 import type { Graph, Node } from "../../shared/graph.ts";
-import { groupLocations } from "./group.ts";
+import { groupLocationsByFile } from "./group.ts";
 import { LocationGroup } from "./code-view.tsx";
 import { ViewType } from "./view-type.ts";
 
@@ -30,11 +30,11 @@ type Props = {
 
 export function Panel({ graph, node, marks, onMark, onSelect, width, onWidth, viewType, onViewType }: Props) {
   // The last mark that couldn't be saved: which location, and why.
-  const [failure, setFailure] = useState<{ index: number; message: string }>();
-  const markAndReport = async (index: number, hash: string, reviewed: boolean) => {
+  const [failure, setFailure] = useState<{ locationId: string; message: string }>();
+  const markAndReport = async (locationId: string, hash: string, reviewed: boolean) => {
     setFailure(undefined);
     const message = await onMark(hash, reviewed);
-    if (message !== undefined) setFailure({ index, message });
+    if (message !== undefined) setFailure({ locationId, message });
   };
   // While the edge is being dragged only the panel follows it; the new width
   // is reported once, on release, so the canvas refits once rather than on
@@ -92,10 +92,11 @@ export function Panel({ graph, node, marks, onMark, onSelect, width, onWidth, vi
         <p style={{ fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{node.text}</p>
         {links(incoming, "←")}
         {links(outgoing, "→")}
-        {groupLocations(node.code).map((group) => (
+        {groupLocationsByFile(node.code).map(({ path, locations }) => (
           <LocationGroup
-            key={`${node.id}:${group[0]!.location.path}`}
-            group={group}
+            key={`${node.id}:${path}`}
+            path={path}
+            locations={locations}
             viewType={viewType}
             marks={marks}
             onReviewed={markAndReport}
