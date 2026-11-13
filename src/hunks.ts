@@ -150,7 +150,7 @@ type Run = { items: number[]; range: [number, number] | undefined };
  * (hunkRange, counted in its own version of the file), with locations whose rows overlap or touch, so that no row is
  * hidden between them, run into one box. A location with no rows in range is a box of its own, last, with no lines.
  */
-export function boxesIn(path: string, changes: Change[], ats: At[]): CodeBox[] {
+function boxesIn(path: string, changes: Change[], ats: At[]): CodeBox[] {
   const cuts = ats
     .map(({ side, start, end, above, below }, i) => ({ i, range: hunkRange(changes, side, start, end, above, below) }))
     .sort((a, b) => (a.range?.[0] ?? Infinity) - (b.range?.[0] ?? Infinity) || a.i - b.i);

@@ -15,6 +15,7 @@ const changed = (line: number, before: string, after: string, text: string) =>
   ({ id: randomUUID(), path: "long.txt", side: "RIGHT" as const, line, hash: hashLines([`-${before}`, `+${after}`]), added: 1, removed: 1, text });
 const NODE_UUID = randomUUID();
 const BOTH_SIDES_UUID = randomUUID();
+const TWO_FILES_UUID = randomUUID();
 const graph: Graph = {
   schema: "test",
   nodes: [
@@ -35,6 +36,15 @@ const graph: Graph = {
         { id: randomUUID(), path: "long.txt", side: "LEFT", line: 40, hash: hashLines(["-line 40"]), added: 0, removed: 1, text: "The old forty, gone." },
       ],
     },
+    {
+      id: TWO_FILES_UUID,
+      title: "a change in each of two files",
+      text: "",
+      code: [
+        changed(5, "line 5", "LINE FIVE", "Five, shouted."),
+        { id: randomUUID(), path: "short.txt", side: "RIGHT", line: 1, hash: hashLines(["-a", "+A"]), added: 1, removed: 1, text: "A, shouted." },
+      ],
+    },
   ],
   edges: [],
 };
@@ -43,9 +53,11 @@ let viewer: Awaited<ReturnType<typeof startViewer>>;
 test.beforeAll(async ({}, { parallelIndex }) => {
   const { dir, git, write } = tempRepo();
   write("long.txt", BASE);
+  write("short.txt", "a\n");
   git("add", ".");
   git("commit", "-qm", "base");
   write("long.txt", HEAD);
+  write("short.txt", "A\n");
   git("commit", "-qam", "head");
   write("graph.json", JSON.stringify(graph));
   viewer = await startViewer(dir, 4750 + parallelIndex, ["--base", "HEAD~1", "--head", "HEAD"]);
@@ -121,4 +133,15 @@ test("a line from before the change and one from after are one box once their li
   await page.getByRole("button", { name: "Split" }).click();
   await expect(boxes.locator(".code-view-inline")).toHaveCount(1);
   await expect(panel.getByRole("checkbox", { name: "reviewed" })).toHaveCount(2);
+});
+
+test("places in two files are two boxes, each under its own file", async ({ page }) => {
+  await page.goto(viewer.url);
+  await page.locator(`.react-flow__node[data-id="${TWO_FILES_UUID}"]`).click();
+  const panel = page.locator("aside");
+  const boxes = panel.locator(".code-view");
+  await expect(boxes).toHaveCount(2);
+  await expect(boxes.nth(0)).toContainText("LINE FIVE");
+  await expect(boxes.nth(1)).toContainText("A");
+  await expect(panel.getByText("short.txt:1 (head)")).toBeVisible();
 });
