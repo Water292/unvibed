@@ -1,14 +1,15 @@
 // How fast a big graph opens: the page drawing every box, and the server answering each location's code. Each test
 // reports what it measured, per box and per location so the numbers stay comparable at any graph size, and flags it
 // as a regression when it's past its target. It fails only if the page or the server doesn't work, never on time.
-// Opt-in: `mise run perf` runs it (PERF=1); `npx playwright test` and `mise run check` leave it out.
+// Opt-in: it has its own folder and config, which only `mise run perf` uses; `npx playwright test` and `mise run check`
+// never see it.
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { diffOf } from "../src/check.ts";
 import { getChanges, ownRows } from "../src/hunks.ts";
 import type { Graph, Location } from "../shared/graph.ts";
 import { tempRepo } from "../test/temp-repo.ts";
-import { startViewer } from "./start-viewer.ts";
+import { startViewer } from "../e2e/start-viewer.ts";
 
 const FILES = 20;
 const NODES = 200;
