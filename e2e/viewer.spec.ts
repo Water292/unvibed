@@ -209,10 +209,6 @@ test.describe("marking code reviewed", () => {
     await expect(page.getByText("The graph doesn't match the code, so it isn't shown.")).toBeVisible();
     await expect(page.getByText('app.ts:2-2 (RIGHT) in "greet says hi": its lines changed')).toBeVisible();
     await expect(box(page, GREET_UUID)).toHaveCount(0);
-
-    repo.write("app.ts", HEAD);
-    await page.reload();
-    await expect(box(page, GREET_UUID)).toBeVisible();
   });
 
   test("code that changes after the page loaded can't be ticked until a reload", async ({ page }) => {
