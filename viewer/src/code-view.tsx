@@ -45,18 +45,20 @@ async function fetchCut(l: Location, above: number, below: number): Promise<Code
 }
 
 /**
- * location: ticked by the graph's hash for it. onReviewed: called with that hash when the box is ticked or cleared.
- * failure: why the last tick couldn't be saved, if it couldn't.
+ * marks: the marks made since the page loaded, by hash; the box is ticked by its code's hash there, else by what its
+ * code came with. onReviewed: called with that hash when the box is ticked or cleared. failure: why the last tick couldn't be saved,
+ * if it couldn't.
  */
 type Props = {
   location: RenderedLocation;
   viewType: ViewType;
+  marks: ReadonlyMap<string, boolean>;
   onReviewed: (hash: string, reviewed: boolean) => void;
   failure: string | undefined;
 };
 
 /** The box keeps how many lines ↑ and ↓ have added (above, below) and shows the code it has until a wider cut arrives. */
-export function CodeView({ location, viewType, onReviewed, failure }: Props) {
+export function CodeView({ location, viewType, marks, onReviewed, failure }: Props) {
   const l = location.location;
   const dark = useDarkMode();
   const [above, setAbove] = useState(0);
@@ -76,8 +78,8 @@ export function CodeView({ location, viewType, onReviewed, failure }: Props) {
 
   const start = l.start_line ?? l.line;
   const side = l.side === "LEFT" ? "base" : "head";
-  // Code that changed since the graph was made no longer has the graph's hash, and a tick saves the graph's hash, so
-  // ticking it would mark lines nobody saw as reviewed: it isn't shown, and can't be ticked.
+  // Code that changed since the graph was made doesn't have the graph's hash: the graph doesn't explain it, so it isn't
+  // shown, and can't be ticked.
   const changedSinceGraph = cut !== undefined && cut.hash !== l.hash;
   return (
     <div style={{ marginTop: 16 }}>
@@ -88,7 +90,7 @@ export function CodeView({ location, viewType, onReviewed, failure }: Props) {
         </span>
         {cut && !changedSinceGraph && (
           <label style={{ fontSize: 11 }}>
-            <input type="checkbox" checked={location.ticked} onChange={(e) => onReviewed(l.hash, e.target.checked)} /> reviewed
+            <input type="checkbox" checked={marks.get(cut.hash) ?? cut.reviewed} onChange={(e) => onReviewed(cut.hash, e.target.checked)} /> reviewed
           </label>
         )}
       </div>
