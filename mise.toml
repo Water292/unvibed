@@ -8,7 +8,7 @@ run = ["npm ci --no-fund --no-audit", "npx playwright install chromium"]
 
 [tasks.typecheck]
 description = "Type-check the project"
-run = ["npx tsc --noEmit", "npx tsc --noEmit -p shared", "npx tsc --noEmit -p viewer", "npx tsc --noEmit -p e2e"]
+run = ["npx tsc --noEmit", "npx tsc --noEmit -p shared", "npx tsc --noEmit -p viewer", "npx tsc --noEmit -p e2e", "npx tsc --noEmit -p perf"]
 
 [tasks.test]
 description = "Run the tests"
@@ -17,6 +17,10 @@ run = "npx vitest run"
 [tasks.e2e]
 description = "Run the browser tests: the viewer in Chromium, on a repo each test file builds"
 run = "npx playwright test"
+
+[tasks.perf]
+description = "Report how fast a big graph opens, against its targets; not part of e2e or check"
+run = "npx playwright test -c playwright.perf.config.ts"
 
 [tasks.check]
 description = "Everything CI checks"
