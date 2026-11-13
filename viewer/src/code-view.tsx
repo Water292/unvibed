@@ -32,9 +32,9 @@ function useDarkMode() {
   return dark;
 }
 
-/** Locations of a file on a side, each as start,end,above,below, from the server, as code boxes. */
-async function fetchCode(path: string, side: Location["side"], ats: string[]): Promise<CodeAnswer> {
-  const q = new URLSearchParams({ path, side });
+/** Locations in a file, each as side,start,end,above,below, from the server, as code boxes. */
+async function fetchCode(path: string, ats: string[]): Promise<CodeAnswer> {
+  const q = new URLSearchParams({ path });
   for (const at of ats) q.append("at", at);
   const res = await fetch(`/code?${q}`);
   if (!res.ok) throw new Error(await res.text());
@@ -50,7 +50,7 @@ type Widen = { above: number; below: number };
 type Shown = Indexed & { own: Own };
 
 /**
- * group: a node's locations in one file on one side (groupLocations). marks: the marks made since the page loaded, by
+ * group: a node's locations in one file (groupLocations). marks: the marks made since the page loaded, by
  * hash; a location's box is ticked by its code's hash there, else by what its code came with. onReviewed: called
  * with the location's index and that hash when its box is ticked or cleared. failure: why the last tick couldn't be
  * saved, and for which location, if it couldn't.
@@ -65,18 +65,20 @@ type Props = {
 
 /** A file's locations in one node: how many lines ↑ and ↓ have added to each, and the boxes the server cuts them into. */
 export function LocationGroup({ group, ...rest }: Props) {
-  const { path, side } = group[0]!.location;
+  const { path } = group[0]!.location;
   const [widened, setWidened] = useState<ReadonlyMap<number, Widen>>(new Map());
   const widen = (i: number) => widened.get(i) ?? { above: 0, below: 0 };
-  const set = (i: number, w: Widen) => setWidened((m) => new Map(m).set(i, w));
+  // change how far location i is widened, from how far it was last asked for
+  const update = (i: number, change: (w: Widen) => Widen) =>
+    setWidened((m) => new Map([...m, [i, change(m.get(i) ?? { above: 0, below: 0 })]]));
   // what's on screen stays there until the answer for a wider request arrives
   const [answer, setAnswer] = useState<CodeAnswer>();
   const [error, setError] = useState<string>();
-  const ats = group.map(({ location: l, index }) => [startOf(l), l.line, widen(index).above, widen(index).below].join(","));
+  const ats = group.map(({ location: l, index }) => [l.side, startOf(l), l.line, widen(index).above, widen(index).below].join(","));
   const request = ats.join(" ");
   useEffect(() => {
     let current = true; // a newer request replaces this one's answer
-    fetchCode(path, side, ats).then(
+    fetchCode(path, ats).then(
       (a) => {
         if (!current) return;
         setAnswer(a);
@@ -87,26 +89,29 @@ export function LocationGroup({ group, ...rest }: Props) {
     return () => {
       current = false;
     };
-  }, [path, side, request]);
+  }, [path, request]);
   return (
     <>
       {error && <div style={{ fontSize: 12, opacity: 0.7, marginTop: 16 }}>{error}</div>}
       {answer?.boxes.map((box) => {
-        // the box's locations, by their place in the request, which is the group's order
+        // the box's locations, in the order they come in the file; the server names them by their place in the request
         const items = box.items.map((i): Shown => ({ ...group[i]!, own: answer.own[i]! }));
         const first = items[0]!;
-        const last = items.reduce((a, b) => (b.location.line > a.location.line ? b : a));
+        const last = items.at(-1)!;
         return (
           <BoxView
             // a box keeps its first location as it takes in the next ones, so it keeps its place on screen
             key={first.index}
             box={box}
             items={items}
-            side={side}
             path={path}
-            // ↑ widens the first location, ↓ the last, each STEP lines past what the box shows
-            onUp={() => set(first.index, { ...widen(first.index), above: startOf(first.location) - box.from + STEP })}
-            onDown={() => set(last.index, { ...widen(last.index), below: box.to - last.location.line + STEP })}
+            // ↑ widens the first location, ↓ the last, STEP lines past what the box shows, counted in the location's own
+            // version of the file; and at least STEP past what was last asked for, so a click before the answer to
+            // the one before still adds lines
+            onUp={() =>
+              update(first.index, (w) => ({ ...w, above: Math.max(w.above, startOf(first.location) - box.from[first.location.side]) + STEP }))
+            }
+            onDown={() => update(last.index, (w) => ({ ...w, below: Math.max(w.below, box.to[last.location.side] - last.location.line) + STEP }))}
             {...rest}
           />
         );
@@ -115,10 +120,10 @@ export function LocationGroup({ group, ...rest }: Props) {
   );
 }
 
-type BoxProps = Omit<Props, "group"> & { box: CodeBox; items: Shown[]; path: string; side: Location["side"]; onUp: () => void; onDown: () => void };
+type BoxProps = Omit<Props, "group"> & { box: CodeBox; items: Shown[]; path: string; onUp: () => void; onDown: () => void };
 
 /** One box: one location's lines, or several that met, with each location's header. */
-function BoxView({ box, items, path, side, onUp, onDown, viewType, marks, onReviewed, failure }: BoxProps) {
+function BoxView({ box, items, path, onUp, onDown, viewType, marks, onReviewed, failure }: BoxProps) {
   const dark = useDarkMode();
   const header = (item: Shown) => (
     <LocationHeader
@@ -130,29 +135,38 @@ function BoxView({ box, items, path, side, onUp, onDown, viewType, marks, onRevi
       failure={failure?.index === item.index ? failure.message : undefined}
     />
   );
-  // The box's first location, and any that start where it does, have their headers above it; each later one's sits
-  // under the line before its first line.
-  const top = items.filter((s) => box.diff === "" || startOf(s.location) === startOf(items[0]!.location));
+  const first = items[0]!;
+  // A later location's header sits under the line before its first line, in its own version of the file. The first
+  // location's header is above the box, and so is any other's that starts where the first does or whose line before
+  // isn't in the box.
+  const above = ({ location: l }: Shown) => startOf(l) - 1;
+  const inBox = (s: Shown) => box.from[s.location.side] > 0 && above(s) >= box.from[s.location.side];
+  const startsWithFirst = (s: Shown) => s.location.side === first.location.side && startOf(s.location) === startOf(first.location);
+  const top = items.filter((s) => s === first || startsWithFirst(s) || !inBox(s));
+  const inline = items.filter((s) => !top.includes(s));
   // The renderer rebuilds its rows whenever data or extendData is a new object, so each is made anew only when what it holds changes.
   const data = useMemo(() => ({ oldFile: { fileName: path }, newFile: { fileName: path }, hunks: box.diff ? [box.diff] : [] }), [path, box.diff]);
   const extendData = useMemo(() => {
-    const inline: Record<string, { data: Shown[] }> = {};
-    for (const item of items.slice(top.length)) (inline[startOf(item.location) - 1] ??= { data: [] }).data.push(item);
-    return { [side === "LEFT" ? "oldFile" : "newFile"]: inline };
-  }, [side, items, top.length]);
+    // the renderer wants, for each line number in a version of the file, the data for the row under that line
+    const rows = (side: Location["side"]) =>
+      Object.fromEntries(
+        Object.entries(Object.groupBy(inline.filter((s) => s.location.side === side), above)).map(([line, data]) => [line, { data: data! }]),
+      );
+    return { oldFile: rows("LEFT"), newFile: rows("RIGHT") };
+  }, [inline.map((s) => `${s.index}:${s.own.hash}:${s.own.reviewed}`).join(" ")]);
   return (
     <div style={{ marginTop: 16 }}>
       {top.map(header)}
       <div className="code-view">
         {box.diff === "" ? (
-          <div style={{ padding: "6px 8px", opacity: 0.7 }}>can't read this file on the {sideName(side)} side</div>
+          <div style={{ padding: "6px 8px", opacity: 0.7 }}>can't read this file on the {sideName(first.location.side)} side</div>
         ) : (
           <>
             {box.moreAbove && <More arrow="↑" onClick={onUp} />}
             <DiffView<Shown[]>
               data={data}
               extendData={extendData}
-              // split view asks both sides for a row; only the locations' side has one
+              // split view asks both halves of the row; a half with no locations starting there draws nothing
               renderExtendLine={({ data }) => (data ? <div className="code-view-inline">{data.map(header)}</div> : null)}
               diffViewMode={viewType === ViewType.Split ? DiffModeEnum.Split : DiffModeEnum.Unified}
               diffViewWrap={false}

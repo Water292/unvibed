@@ -14,6 +14,7 @@ const HEAD = BASE.replace("line 5\n", "LINE FIVE\n").replace("line 40\n", "LINE 
 const changed = (line: number, before: string, after: string, text: string) =>
   ({ id: randomUUID(), path: "long.txt", side: "RIGHT" as const, line, hash: hashLines([`-${before}`, `+${after}`]), added: 1, removed: 1, text });
 const NODE_UUID = randomUUID();
+const BOTH_SIDES_UUID = randomUUID();
 const graph: Graph = {
   schema: "test",
   nodes: [
@@ -23,6 +24,16 @@ const graph: Graph = {
       text: "",
       // listed last line first: the panel shows them in the file's order
       code: [changed(40, "line 40", "LINE FORTY", "Forty, shouted."), changed(5, "line 5", "LINE FIVE", "Five, shouted.")],
+    },
+    {
+      id: BOTH_SIDES_UUID,
+      title: "a change, and a line it removed",
+      text: "",
+      // line 5 as it is after the change, and line 40 as it was before
+      code: [
+        changed(5, "line 5", "LINE FIVE", "Five, shouted."),
+        { id: randomUUID(), path: "long.txt", side: "LEFT", line: 40, hash: hashLines(["-line 40"]), added: 0, removed: 1, text: "The old forty, gone." },
+      ],
     },
   ],
   edges: [],
@@ -89,4 +100,25 @@ test("each location's explanation is above its lines; ↓ runs the two into one 
   await page.getByRole("button", { name: "Split" }).click();
   await expect(boxes.locator(".code-view-inline")).toHaveCount(1);
   await expect(reviewed).toHaveCount(2);
+});
+
+test("a line from before the change and one from after are one box once their lines meet, the later header shown once", async ({ page }) => {
+  await page.goto(viewer.url);
+  await page.locator(`.react-flow__node[data-id="${BOTH_SIDES_UUID}"]`).click();
+  const panel = page.locator("aside");
+  const boxes = panel.locator(".code-view");
+  await expect(boxes).toHaveCount(2);
+  await expect(panel.getByText("long.txt:40 (base)")).toBeVisible();
+
+  await boxes.nth(0).getByRole("button", { name: "↓" }).click();
+  await boxes.nth(0).getByRole("button", { name: "↓" }).click();
+  await expect(boxes).toHaveCount(1);
+  // the removed line's header sits inside the box once, under line 39, in unified view and in split view
+  const inline = boxes.locator(".code-view-inline");
+  await expect(inline).toHaveCount(1);
+  await expect(inline).toContainText("The old forty, gone.");
+  await expect(inline.locator("xpath=ancestor::tr/preceding-sibling::tr[1]")).toContainText("line 39");
+  await page.getByRole("button", { name: "Split" }).click();
+  await expect(boxes.locator(".code-view-inline")).toHaveCount(1);
+  await expect(panel.getByRole("checkbox", { name: "reviewed" })).toHaveCount(2);
 });

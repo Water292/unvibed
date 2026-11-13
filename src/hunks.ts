@@ -116,58 +116,63 @@ export function ownRows(changes: Change[], side: Location["side"], start: number
     .map(toDiffLine);
 }
 
-/** What /code answers for n locations in a file that can't be read on their side: one empty box. */
+/** What /code answers for n locations in a file it can't read: one box with no lines. */
 export function emptyAnswer(n: number): CodeAnswer {
   const items = Array.from({ length: n }, (_, i) => i);
-  return { boxes: [{ items, diff: "", from: 0, to: 0, moreAbove: false, moreBelow: false }], own: items.map(() => ({ hash: "", reviewed: false })) };
+  const none = { LEFT: 0, RIGHT: 0 };
+  return { boxes: [{ items, diff: "", from: none, to: none, moreAbove: false, moreBelow: false }], own: items.map(() => ({ hash: "", reviewed: false })) };
 }
 
 /**
- * The locations ats of path on side, each widened by its above / below lines, read now (from git at a commit, from
- * disk for the working tree), as code boxes (boxesIn), and each location's own rows' hash and whether it's marked
- * reviewed in review, from the same read. The caller
- * checks that path is a file in the repo (isRepoFile).
+ * The locations ats of path, each widened by its above / below lines, read now (from git at a commit, from disk for
+ * the working tree), as code boxes (boxesIn), and each location's own rows' hash and whether it's marked reviewed in
+ * review, all from the same read. Only the versions readable allows are read: the caller checks the file is in the
+ * repo in each (isRepoFile), and one it may not read is treated as missing.
  */
-export function codeFor(path: string, side: Location["side"], ats: At[], base: string, head: string | undefined, review: string): CodeAnswer {
-  const before = show(base, path);
-  const after = show(head, path);
-  if ((side === "LEFT" ? before : after) === undefined) return emptyAnswer(ats.length);
+export function codeFor(path: string, ats: At[], base: string, head: string | undefined, review: string, readable: { LEFT: boolean; RIGHT: boolean }): CodeAnswer {
+  const before = readable.LEFT ? show(base, path) : undefined;
+  const after = readable.RIGHT ? show(head, path) : undefined;
+  if (before === undefined && after === undefined) return emptyAnswer(ats.length);
+  // one diff for the whole file: every location, whichever version its line numbers count in, is rows of it
   const changes = getChanges(before, after);
-  const own = ats.map(({ start, end }): Own => {
+  const own = ats.map(({ side, start, end }): Own => {
     const rows = ownRows(changes, side, start, end);
     const hash = rows.length ? hashLines(rows) : "";
     return { hash, reviewed: isReviewed(review, hash) };
   });
-  return { boxes: boxesIn(path, changes, side, ats), own };
+  return { boxes: boxesIn(path, changes, ats), own };
 }
 
+type Run = { items: number[]; range: [number, number] | undefined };
+
 /**
- * The code boxes for locations ats of path on side, in the order they start: each location's rows (hunkRange), with
- * locations whose rows overlap or touch, so that no row is hidden between them, run into one box. A location with no
- * rows in range is a box of its own, last, with no lines.
+ * The code boxes for locations ats of path, in the order they start in the file's diff: each location's rows
+ * (hunkRange, counted in its own version of the file), with locations whose rows overlap or touch, so that no row is
+ * hidden between them, run into one box. A location with no rows in range is a box of its own, last, with no lines.
  */
-export function boxesIn(path: string, changes: Change[], side: Location["side"], ats: At[]): CodeBox[] {
-  const line = side === "LEFT" ? oldLine : newLine;
+export function boxesIn(path: string, changes: Change[], ats: At[]): CodeBox[] {
   const cuts = ats
-    .map(({ start, end, above, below }, i) => ({ i, range: hunkRange(changes, side, start, end, above, below) }))
+    .map(({ side, start, end, above, below }, i) => ({ i, range: hunkRange(changes, side, start, end, above, below) }))
     .sort((a, b) => (a.range?.[0] ?? Infinity) - (b.range?.[0] ?? Infinity) || a.i - b.i);
-  const runs: { items: number[]; range: [number, number] | undefined }[] = [];
-  for (const { i, range } of cuts) {
-    const run = runs.at(-1);
-    if (range && run?.range && range[0] <= run.range[1] + 1) {
-      run.items.push(i);
-      run.range[1] = Math.max(run.range[1], range[1]);
-    } else runs.push({ items: [i], range });
-  }
+  const runs = cuts.reduce<Run[]>((runs, { i, range }) => {
+    const last = runs.at(-1);
+    if (range && last?.range && range[0] <= last.range[1] + 1) {
+      const joined: Run = { items: [...last.items, i], range: [last.range[0], Math.max(last.range[1], range[1])] };
+      return [...runs.slice(0, -1), joined];
+    }
+    return [...runs, { items: [i], range }];
+  }, []);
   return runs.map(({ items, range }): CodeBox => {
-    if (!range) return { items, diff: "", from: 0, to: 0, moreAbove: false, moreBelow: false };
+    const none = { LEFT: 0, RIGHT: 0 };
+    if (!range) return { items, diff: "", from: none, to: none, moreAbove: false, moreBelow: false };
     const cut = changes.slice(range[0], range[1] + 1);
-    const lines = cut.map(line).filter((n) => n > 0);
+    const lefts = cut.map(oldLine).filter((n) => n > 0);
+    const rights = cut.map(newLine).filter((n) => n > 0);
     return {
       items,
       diff: diffText(path, cut),
-      from: lines[0] ?? 0,
-      to: lines.at(-1) ?? 0,
+      from: { LEFT: lefts[0] ?? 0, RIGHT: rights[0] ?? 0 },
+      to: { LEFT: lefts.at(-1) ?? 0, RIGHT: rights.at(-1) ?? 0 },
       moreAbove: range[0] > 0,
       moreBelow: range[1] < changes.length - 1,
     };

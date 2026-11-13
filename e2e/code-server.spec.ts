@@ -19,15 +19,15 @@ test.afterAll(() => viewer.stop());
 
 test("an ignored file on disk comes back as an empty box, never its contents", async () => {
   // the handler checks the file before reading it; without the check, this would read secret.txt from disk
-  const res = await fetch(`${viewer.url}code?path=secret.txt&side=RIGHT&at=1,1,0,0`);
+  const res = await fetch(`${viewer.url}code?path=secret.txt&at=RIGHT,1,1,0,0`);
   expect(await res.json()).toEqual({
-    boxes: [{ items: [0], diff: "", from: 0, to: 0, moreAbove: false, moreBelow: false }],
+    boxes: [{ items: [0], diff: "", from: { LEFT: 0, RIGHT: 0 }, to: { LEFT: 0, RIGHT: 0 }, moreAbove: false, moreBelow: false }],
     own: [{ hash: "", reviewed: false }],
   });
 });
 
 test("no other page can read its answers", async () => {
   // a request from another localhost page gets no permission to read the answer (cors is off)
-  const res = await fetch(`${viewer.url}code?path=app.ts&side=RIGHT&at=1,1,0,0`, { headers: { Origin: "http://localhost:5173" } });
+  const res = await fetch(`${viewer.url}code?path=app.ts&at=RIGHT,1,1,0,0`, { headers: { Origin: "http://localhost:5173" } });
   expect(res.headers.get("access-control-allow-origin")).toBeNull();
 });

@@ -1,4 +1,5 @@
 import { expect, test } from "vitest";
+import type { At } from "../shared/graph-and-code.ts";
 import { boxesIn, diffText, gitdiff, hunkIn } from "../src/hunks.ts";
 
 // line 2 "b" was replaced by "B", and "d" was added after "c"
@@ -71,8 +72,10 @@ test("a location's own edges don't take in a change next to them", () => {
   expect(widened(4, 4, 0, 0)).toEqual(["1", "2", "3", "4"]);
 });
 
-const at = (start: number, end: number, above = 0, below = 0) => ({ start, end, above, below });
-const boxes = (...ats: ReturnType<typeof at>[]) => boxesIn("g", longer, "RIGHT", ats).map(({ items, from, to }) => ({ items, from, to }));
+// A location in the head version of the file (after the change): its lines, and how far ↑ and ↓ widened them.
+const at = (start: number, end: number, above = 0, below = 0) => ({ side: "RIGHT" as const, start, end, above, below });
+// Each box as which locations it shows and the first and last head line it shows.
+const boxes = (...ats: At[]) => boxesIn("g", longer, ats).map(({ items, from, to }) => ({ items, from: from.RIGHT, to: to.RIGHT }));
 
 // 20 unchanged lines
 const plain = gitdiff.parse(
@@ -82,7 +85,7 @@ const plain = gitdiff.parse(
 test("locations whose rows overlap or touch are one box, from the first line any shows to the last", () => {
   // 7 shows 7..10 (its unchanged lines stop at the change above it), 12 shows 9..12
   expect(boxes(at(7, 7), at(12, 12))).toEqual([{ items: [0, 1], from: 7, to: 12 }]);
-  const plainBoxes = (...ats: ReturnType<typeof at>[]) => boxesIn("p", plain, "RIGHT", ats).map(({ items, from, to }) => ({ items, from, to }));
+  const plainBoxes = (...ats: At[]) => boxesIn("p", plain, ats).map(({ items, from, to }) => ({ items, from: from.RIGHT, to: to.RIGHT }));
   // 5 shows 2..8, 12 shows 9..15: nothing between them
   expect(plainBoxes(at(5, 5), at(12, 12))).toEqual([{ items: [0, 1], from: 2, to: 15 }]);
   // 13 shows 10..16: line 9 is between them
@@ -100,7 +103,17 @@ test("a change neither location shows keeps them two boxes, however few lines ap
 });
 
 test("boxes come in the order their rows start, whatever the request's order; a location with no rows is last", () => {
-  expect(boxesIn("g", longer, "RIGHT", [at(40, 40), at(8, 8), at(4, 4)]).map((b) => b.items)).toEqual([[2], [1], [0]]);
+  expect(boxesIn("g", longer, [at(40, 40), at(8, 8), at(4, 4)]).map((b) => b.items)).toEqual([[2], [1], [0]]);
+});
+
+test("a location in the base version and one in the head version are one box when their rows meet", () => {
+  // base line 5 ("five") shows base lines 2..5; head lines 5..6, what replaced it, show from head line 2 with it
+  const removed = { side: "LEFT" as const, start: 5, end: 5, above: 0, below: 0 };
+  expect(boxesIn("g", longer, [removed, at(5, 6)]).map(({ items, from, to }) => ({ items, from, to }))).toEqual([
+    { items: [0, 1], from: { LEFT: 2, RIGHT: 2 }, to: { LEFT: 8, RIGHT: 9 } },
+  ]);
+  // head line 8 shows head lines 7..11: the head lines 5..6 between them are shown by neither, so two boxes
+  expect(boxesIn("g", longer, [removed, at(8, 8)]).map((b) => b.items)).toEqual([[0], [1]]);
 });
 
 test("no changes, a file that can't be read, is empty text", () => {

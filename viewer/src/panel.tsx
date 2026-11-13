@@ -94,7 +94,7 @@ export function Panel({ graph, node, marks, onMark, onSelect, width, onWidth, vi
         {links(outgoing, "→")}
         {groupLocations(node.code).map((group) => (
           <LocationGroup
-            key={`${node.id}:${group[0]!.location.side}:${group[0]!.location.path}`}
+            key={`${node.id}:${group[0]!.location.path}`}
             group={group}
             viewType={viewType}
             marks={marks}
