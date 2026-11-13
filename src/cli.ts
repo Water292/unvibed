@@ -9,8 +9,8 @@
 // RIGHT locations at --head (default: the working tree).
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
-import { check, checkIds, type ReadFile } from "./check.ts";
-import { defaultBase, show } from "./git.ts";
+import { check, checkIds, readAt } from "./check.ts";
+import { defaultBase } from "./git.ts";
 import type { Graph } from "../shared/graph.ts";
 
 const usage = "usage: node src/cli.ts check <graph.json> [--base <rev>] [--head <rev>]";
@@ -30,13 +30,9 @@ function main(argv: string[]): number {
   }
   const base = args.values.base ?? defaultBase();
   const head = args.values.head;
-  const read: ReadFile = (side, path) => {
-    const rev = side === "LEFT" ? base : head;
-    return show(rev, path);
-  };
   const graph = JSON.parse(readFileSync(file, "utf8")) as Graph;
 
-  const problems = check(graph, read);
+  const problems = check(graph, readAt(base, head));
   for (const p of problems) {
     console.log(`✗ ${p.node}: ${p.path}:${p.start_line}-${p.line} (${p.side}) ${p.reason}`);
     for (const l of p.actual ?? []) console.log(`    | ${l}`);

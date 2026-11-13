@@ -3,25 +3,29 @@
 //   node src/view.ts <graph.json> [--base <rev>] [--head <rev>] [--port <n>] [--review <name>]
 //
 // Starts Vite's development server (hot reload included) and answers
-// /graph.json with the chosen file, which can be anywhere on disk.
+// /graph.json with the chosen file, which can be anywhere on disk, once it
+// matches the code: a graph whose locations no longer match their diff between
+// --base and --head is refused, with a list of what doesn't match.
 // /code?path=&side=&start=&end=[&above=&below=] answers with those lines of a
 // file in the repo, diffed between --base (default: merge-base of origin/main
 // and HEAD) and --head (default: the working tree), read when asked, and
 // whether they're marked reviewed in this review: the one --review names,
 // else the branch --head names, else the branch checked out at startup.
 // Without --head the code is the working tree, so if another branch is checked
-// out later, requests are refused until it's back. POST /mark records a mark.
-// The page gets nothing else from disk. It listens on --port, failing if
+// out later, requests are refused until it's back. POST /mark records a mark;
+// /reviewed answers with the hashes of all the lines marked reviewed in this
+// review. The page gets nothing else from disk. It listens on --port, failing if
 // that's taken; without it, on the first free port from 4620.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { text } from "node:stream/consumers";
 import { parseArgs } from "node:util";
 import { createServer, type Plugin } from "vite";
+import { check, describeProblem, readAt } from "./check.ts";
 import { defaultBase, isRepoFile } from "./git.ts";
 import type { Graph } from "../shared/graph.ts";
 import { cutFor, EMPTY_CUT } from "./hunks.ts";
-import { createTables, currentBranch, isBranch, mark } from "./review.ts";
+import { createTables, currentBranch, isBranch, mark, reviewedHashes } from "./review.ts";
 import { z } from "zod";
 import { CodeQuery, MarkRequest } from "../shared/graph-and-code.ts";
 
@@ -83,8 +87,28 @@ const serveGraph: Plugin = {
         res.end(`can't read ${path}`);
         return;
       }
+      // A tick saves the graph's hash for a location, so a graph that no longer matches the code would let code
+      // nobody saw be marked reviewed: it isn't shown at all.
+      const problems = check(graph, readAt(base, head));
+      if (problems.length) {
+        const titleOf = new Map(graph.nodes.map((n) => [n.id, n.title]));
+        res.statusCode = 409;
+        res.end(
+          [
+            `The graph doesn't match the code, so it isn't shown. Update it (mise run graph check lists what it should hold), then reload. These locations don't match their code:`,
+            ...problems.map((p) => `✗ ${describeProblem(p, titleOf.get(p.node)!)}`),
+          ].join("\n"),
+        );
+        return;
+      }
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify(graph));
+    });
+    // No branch check, which runs git: the marks are the review's whatever is checked out, and the page asks for
+    // them along with /graph.json, which is refused on another branch.
+    server.middlewares.use("/reviewed", (_req, res) => {
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify(reviewedHashes(review)));
     });
     server.middlewares.use("/code", (req, res) => {
       const branchChange = describeBranchChange();

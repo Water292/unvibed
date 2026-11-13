@@ -45,20 +45,18 @@ async function fetchCut(l: Location, above: number, below: number): Promise<Code
 }
 
 /**
- * marks: the marks made since the page loaded, by hash; the box is ticked by its code's hash there, else by what its
- * code came with. onReviewed: called with that hash when the box is ticked or cleared. failure: why the last tick couldn't be saved,
- * if it couldn't.
+ * location: ticked by the graph's hash for it. onReviewed: called with that hash when the box is ticked or cleared.
+ * failure: why the last tick couldn't be saved, if it couldn't.
  */
 type Props = {
   location: RenderedLocation;
   viewType: ViewType;
-  marks: ReadonlyMap<string, boolean>;
   onReviewed: (hash: string, reviewed: boolean) => void;
   failure: string | undefined;
 };
 
 /** The box keeps how many lines ↑ and ↓ have added (above, below) and shows the code it has until a wider cut arrives. */
-export function CodeView({ location, viewType, marks, onReviewed, failure }: Props) {
+export function CodeView({ location, viewType, onReviewed, failure }: Props) {
   const l = location.location;
   const dark = useDarkMode();
   const [above, setAbove] = useState(0);
@@ -78,6 +76,9 @@ export function CodeView({ location, viewType, marks, onReviewed, failure }: Pro
 
   const start = l.start_line ?? l.line;
   const side = l.side === "LEFT" ? "base" : "head";
+  // The server checks the graph against the code when the page loads; code that changed since then no longer matches
+  // the graph's hash, so a tick here would mark lines nobody has seen. It can't be ticked until a reload.
+  const changedSinceLoad = cut !== undefined && cut.hash !== l.hash;
   return (
     <div style={{ marginTop: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
@@ -85,11 +86,12 @@ export function CodeView({ location, viewType, marks, onReviewed, failure }: Pro
           {l.path}:{start}
           {start !== l.line ? `-${l.line}` : ""} ({side})
         </span>
-        {cut && (
+        {cut && !changedSinceLoad && (
           <label style={{ fontSize: 11 }}>
-            <input type="checkbox" checked={marks.get(cut.hash) ?? cut.reviewed} onChange={(e) => onReviewed(cut.hash, e.target.checked)} /> reviewed
+            <input type="checkbox" checked={location.ticked} onChange={(e) => onReviewed(l.hash, e.target.checked)} /> reviewed
           </label>
         )}
+        {changedSinceLoad && <span style={{ fontSize: 11, color: "#dc2626" }}>changed since the graph loaded: reload</span>}
       </div>
       {failure && <div style={{ fontSize: 11, color: "#dc2626", marginBottom: 4 }}>Couldn't save: {failure}</div>}
       {error && <div style={{ fontSize: 12, opacity: 0.7 }}>{error}</div>}

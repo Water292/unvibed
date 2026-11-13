@@ -21,7 +21,6 @@ type Props = {
   node: Node;
   /** The node's locations, as shown. */
   locations: RenderedLocation[];
-  marks: ReadonlyMap<string, boolean>;
   onMark: (hash: string, reviewed: boolean) => Promise<string | undefined>;
   onSelect: (id: string | undefined) => void;
   width: number;
@@ -30,7 +29,7 @@ type Props = {
   onViewType: (viewType: ViewType) => void;
 };
 
-export function Panel({ graph, node, locations, marks, onMark, onSelect, width, onWidth, viewType, onViewType }: Props) {
+export function Panel({ graph, node, locations, onMark, onSelect, width, onWidth, viewType, onViewType }: Props) {
   // The last mark that couldn't be saved: which location, and why.
   const [failure, setFailure] = useState<{ index: number; message: string }>();
   const markAndReport = async (index: number, hash: string, reviewed: boolean) => {
@@ -99,7 +98,6 @@ export function Panel({ graph, node, locations, marks, onMark, onSelect, width, 
             key={`${node.id}:${i}`}
             location={location}
             viewType={viewType}
-            marks={marks}
             onReviewed={(hash, r) => markAndReport(i, hash, r)}
             failure={failure?.index === i ? failure.message : undefined}
           />

@@ -7,7 +7,7 @@ import { check } from "../src/check.ts";
 import { cutFor } from "../src/hunks.ts";
 import { gitWithInput, show } from "../src/git.ts";
 import { MarkRequest } from "../shared/graph-and-code.ts";
-import { createTables, currentBranch, isReviewed, mark } from "../src/review.ts";
+import { createTables, currentBranch, isReviewed, mark, reviewedHashes } from "../src/review.ts";
 import type { Location } from "../shared/graph.ts";
 import { tempRepo } from "./temp-repo.ts";
 
@@ -149,6 +149,14 @@ test("reviews are kept apart: a mark in one doesn't count in another", () => {
   tick(createLocation(4, 5));
   const { hash } = getLocationView(createLocation(4, 5));
   expect(isReviewed("other", hash)).toBe(false);
+});
+
+test("a review lists the hashes marked in it, and no others", () => {
+  mark(REVIEW, "a", true);
+  mark(REVIEW, "b", true);
+  mark(REVIEW, "b", false);
+  mark("other", "c", true);
+  expect(reviewedHashes(REVIEW)).toEqual(["a"]);
 });
 
 test("a review is named after the current branch", () => {
