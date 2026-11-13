@@ -9,7 +9,7 @@ import { DiffModeEnum, DiffView } from "@git-diff-view/react";
 import "@git-diff-view/react/styles/diff-view-pure.css";
 import { useEffect, useMemo, useState } from "react";
 import "./code-view.css";
-import type { CodeAnswer, CodeBox, Own } from "../../shared/graph-and-code.ts";
+import type { CodeAnswer, CodeBox, CodeRequest, Own } from "../../shared/graph-and-code.ts";
 import type { Location } from "../../shared/graph.ts";
 import { startOf } from "./group.ts";
 import type { RenderedLocation } from "./rendered-location.ts";
@@ -33,11 +33,9 @@ function useDarkMode() {
   return dark;
 }
 
-/** Locations in a file, each as side,start,end,above,below, from the server, as code boxes. */
-async function fetchCode(path: string, ats: string[]): Promise<CodeAnswer> {
-  const q = new URLSearchParams({ path });
-  for (const at of ats) q.append("at", at);
-  const res = await fetch(`/code?${q}`);
+/** Locations in one file, from the server, as code boxes. */
+async function fetchCode(request: CodeRequest): Promise<CodeAnswer> {
+  const res = await fetch("/code", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request) });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -76,11 +74,14 @@ export function LocationGroup({ path, locations, ...rest }: Props) {
   // what's on screen stays there until the answer for a wider request arrives
   const [answer, setAnswer] = useState<CodeAnswer>();
   const [error, setError] = useState<string>();
-  const ats = locations.map(({ location: l }) => [l.side, startOf(l), l.line, widen(l.id).above, widen(l.id).below].join(","));
-  const request = ats.join(" ");
+  const request: CodeRequest = {
+    locations: locations.map(({ location }) => ({ id: location.id, above: widen(location.id).above, below: widen(location.id).below })),
+  };
+  // a new request is sent only when what it asks for changes
+  const asked = JSON.stringify(request);
   useEffect(() => {
     let current = true; // a newer request replaces this one's answer
-    fetchCode(path, ats).then(
+    fetchCode(request).then(
       (a) => {
         if (!current) return;
         setAnswer(a);
@@ -91,7 +92,7 @@ export function LocationGroup({ path, locations, ...rest }: Props) {
     return () => {
       current = false;
     };
-  }, [path, request]);
+  }, [asked]);
   return (
     <>
       {error && <div style={{ fontSize: 12, opacity: 0.7, marginTop: 16 }}>{error}</div>}

@@ -10,6 +10,7 @@ import { getChanges, ownRows } from "../src/hunks.ts";
 import type { CodeAnswer } from "../shared/graph-and-code.ts";
 import type { Graph, Location } from "../shared/graph.ts";
 import { tempRepo } from "../test/temp-repo.ts";
+import { askCode } from "../e2e/ask-code.ts";
 import { startViewer } from "../e2e/start-viewer.ts";
 
 const FILES = 20;
@@ -82,10 +83,9 @@ test(`how long a graph of ${NODES} nodes takes to draw every box`, async ({ page
 test("how long the server takes to answer one location's code", async () => {
   const times: number[] = [];
   for (const l of graph.nodes.slice(0, TIMED_LOCATIONS).map((n) => n.code[0]!)) {
-    // asked as the panel asks for a file with one location in it, not widened
-    const q = new URLSearchParams({ path: l.path, at: [l.side, l.start_line ?? l.line, l.line, 0, 0].join(",") });
     const start = performance.now();
-    const res = await fetch(`${viewer.url}code?${q}`);
+    // as the panel asks for a file with one location in it, not widened
+    const res = await askCode(viewer.url, { locations: [{ id: l.id, above: 0, below: 0 }] });
     const answer: CodeAnswer = await res.json();
     times.push(performance.now() - start);
     expect(res.ok).toBe(true);

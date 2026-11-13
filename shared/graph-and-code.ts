@@ -1,25 +1,15 @@
 import { z } from "zod";
 
 /**
- * One location in a /code request, sent as at=side,start,end,above,below: which version of the file its line numbers
- * count in (LEFT, before the change, or RIGHT, after it), its lines, and how far ↑ and ↓ widened them.
+ * One location a /code request asks for: its id in the graph, which gives its file, side and lines, and how many
+ * lines ↑ (above) and ↓ (below) have added to it.
  */
-export const At = z
-  .string()
-  .regex(/^(LEFT|RIGHT),\d+,\d+,\d+,\d+$/, "at must be side,start,end,above,below")
-  .transform((s) => {
-    const [side, ...numbers] = s.split(",");
-    const [start, end, above, below] = numbers.map(Number) as [number, number, number, number];
-    return { side: side as "LEFT" | "RIGHT", start, end, above, below };
-  })
-  .refine((a) => a.start >= 1 && a.end >= a.start, { message: "start must be at least 1, and end at least start" });
-export type At = z.infer<typeof At>;
+export const RequestedLocation = z.object({ id: z.string().min(1), above: z.number().int().min(0), below: z.number().int().min(0) });
+export type RequestedLocation = z.infer<typeof RequestedLocation>;
 
-/** What a /code request holds: a file, and the locations in it to show. */
-export const CodeQuery = z.object({
-  path: z.string().min(1),
-  at: z.array(At).min(1),
-});
+/** What a /code request holds: locations of the graph, all in one file. */
+export const CodeRequest = z.object({ locations: z.array(RequestedLocation).min(1) });
+export type CodeRequest = z.infer<typeof CodeRequest>;
 
 /** A line number in each version of the file: LEFT before the change, RIGHT after it; 0 where there's none. */
 export type Lines = { LEFT: number; RIGHT: number };

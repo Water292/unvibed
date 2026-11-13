@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import gitdiffModule, { type Change } from "gitdiff-parser";
 import { git, gitWithInput, show } from "./git.ts";
 import { isReviewed } from "./review.ts";
-import type { At, CodeAnswer, CodeBox, Own } from "../shared/graph-and-code.ts";
+import type { CodeAnswer, CodeBox, Own } from "../shared/graph-and-code.ts";
 import type { Location } from "../shared/graph.ts";
 
 /**
@@ -123,36 +123,49 @@ export function emptyAnswer(n: number): CodeAnswer {
   return { boxes: [{ items, diff: "", from: none, to: none, moreAbove: false, moreBelow: false }], own: items.map(() => ({ hash: "", reviewed: false })) };
 }
 
+/** A location of the graph, and how many lines ↑ (above) and ↓ (below) have added to it. */
+export type WidenedLocation = { location: Location; above: number; below: number };
+
 /**
- * The locations ats of path, each widened by its above / below lines, read now (from git at a commit, from disk for
+ * The widened locations of path, each with the lines ↑ and ↓ added to it, read now (from git at a commit, from disk for
  * the working tree), as code boxes (boxesIn), and each location's own rows' hash and whether it's marked reviewed in
  * review, all from the same read. Only the versions readable allows are read: the caller checks the file is in the
  * repo in each (isRepoFile), and one it may not read is treated as missing.
  */
-export function codeFor(path: string, ats: At[], base: string, head: string | undefined, review: string, readable: { LEFT: boolean; RIGHT: boolean }): CodeAnswer {
+export function codeFor(
+  path: string,
+  widened: WidenedLocation[],
+  base: string,
+  head: string | undefined,
+  review: string,
+  readable: { LEFT: boolean; RIGHT: boolean },
+): CodeAnswer {
   const before = readable.LEFT ? show(base, path) : undefined;
   const after = readable.RIGHT ? show(head, path) : undefined;
-  if (before === undefined && after === undefined) return emptyAnswer(ats.length);
+  if (before === undefined && after === undefined) return emptyAnswer(widened.length);
   // one diff for the whole file: every location, whichever version its line numbers count in, is rows of it
   const changes = getChanges(before, after);
-  const own = ats.map(({ side, start, end }): Own => {
-    const rows = ownRows(changes, side, start, end);
+  const own = widened.map(({ location }): Own => {
+    const rows = ownRows(changes, location.side, location.start_line ?? location.line, location.line);
     const hash = rows.length ? hashLines(rows) : "";
     return { hash, reviewed: isReviewed(review, hash) };
   });
-  return { boxes: boxesIn(path, changes, ats), own };
+  return { boxes: boxesIn(path, changes, widened), own };
 }
 
 type Run = { items: number[]; range: [number, number] | undefined };
 
 /**
- * The code boxes for locations ats of path, in the order they start in the file's diff: each location's rows
+ * The code boxes for the widened locations of path, in the order they start in the file's diff: each location's rows
  * (hunkRange, counted in its own version of the file), with locations whose rows overlap or touch, so that no row is
  * hidden between them, run into one box. A location with no rows in range is a box of its own, last, with no lines.
  */
-function boxesIn(path: string, changes: Change[], ats: At[]): CodeBox[] {
-  const cuts = ats
-    .map(({ side, start, end, above, below }, i) => ({ i, range: hunkRange(changes, side, start, end, above, below) }))
+function boxesIn(path: string, changes: Change[], widened: WidenedLocation[]): CodeBox[] {
+  const cuts = widened
+    .map(({ location, above, below }, i) => ({
+      i,
+      range: hunkRange(changes, location.side, location.start_line ?? location.line, location.line, above, below),
+    }))
     .sort((a, b) => (a.range?.[0] ?? Infinity) - (b.range?.[0] ?? Infinity) || a.i - b.i);
   const runs = cuts.reduce<Run[]>((runs, { i, range }) => {
     const last = runs.at(-1);
