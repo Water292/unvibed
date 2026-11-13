@@ -1,9 +1,10 @@
-import { StrictMode, useEffect, useState } from "react";
+import { StrictMode, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { MarkRequest } from "../../shared/graph-and-code.ts";
 import type { Graph } from "../../shared/graph.ts";
 import { clampPanelWidth, initialPanelWidth, Panel } from "./panel.tsx";
 import { Flow } from "./react-flow/flow.tsx";
+import { renderLocations } from "./rendered-location.ts";
 import { isViewType, ViewType } from "./view-type.ts";
 
 /** The graph, and the hashes of the lines already marked reviewed in this review. */
@@ -59,10 +60,11 @@ function savePanelShare(share: number) {
 
 function App() {
   const [graph, setGraph] = useState<Graph>();
-  // The marks by hash: every hash marked reviewed when the page loaded, then the marks made since. They colour the
-  // canvas's nodes and the panel's boxes, and outrank what a box's code came with, so every box with the same lines
-  // follows a tick, on screen or fetched later.
+  // The marks by hash: every hash marked reviewed when the page loaded, then the marks made since. They tick each
+  // location, which colours the canvas's nodes and the panel's boxes, and outrank what a box's code came with, so
+  // every box with the same lines follows a tick, on screen or fetched later.
   const [marks, setMarks] = useState<ReadonlyMap<string, boolean>>(new Map());
+  const locations = useMemo(() => graph && renderLocations(graph, marks), [graph, marks]);
   const [error, setError] = useState<string>();
   const [selected, setSelected] = useState<string>();
   const [viewType, setViewType] = useState(savedViewType);
@@ -94,7 +96,7 @@ function App() {
   }, []);
 
   if (error) return <p style={{ padding: 16, fontFamily: "system-ui" }}>{error}</p>;
-  if (!graph) return null;
+  if (!graph || !locations) return null;
   const node = graph.nodes.find((n) => n.id === selected);
   // Saves the mark, then records it here, which ticks every location with the same lines. Returns why it couldn't be
   // saved, if it couldn't.
@@ -110,11 +112,12 @@ function App() {
   const width = clampPanelWidth(Math.round(share * windowWidth), windowWidth);
   return (
     <div style={{ position: "relative", height: "100%" }}>
-      <Flow graph={graph} marks={marks} selected={selected} onSelect={setSelected} covered={node ? width : 0} />
+      <Flow graph={graph} locations={locations} selected={selected} onSelect={setSelected} covered={node ? width : 0} />
       {node && (
         <Panel
           graph={graph}
           node={node}
+          locations={locations.get(node.id)!}
           marks={marks}
           onMark={onMark}
           onSelect={setSelected}

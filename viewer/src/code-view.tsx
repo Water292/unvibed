@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import "./code-view.css";
 import type { CodeCut } from "../../shared/graph-and-code.ts";
 import type { Location } from "../../shared/graph.ts";
-import { tint } from "./review-status.ts";
+import { tint, type RenderedLocation } from "./rendered-location.ts";
 import { ViewType } from "./view-type.ts";
 
 const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
@@ -50,7 +50,7 @@ async function fetchCut(l: Location, above: number, below: number): Promise<Code
  * if it couldn't.
  */
 type Props = {
-  location: Location;
+  location: RenderedLocation;
   viewType: ViewType;
   marks: ReadonlyMap<string, boolean>;
   onReviewed: (hash: string, reviewed: boolean) => void;
@@ -58,7 +58,8 @@ type Props = {
 };
 
 /** The box keeps how many lines ↑ and ↓ have added (above, below) and shows the code it has until a wider cut arrives. */
-export function CodeView({ location: l, viewType, marks, onReviewed, failure }: Props) {
+export function CodeView({ location, viewType, marks, onReviewed, failure }: Props) {
+  const l = location.location;
   const dark = useDarkMode();
   const [above, setAbove] = useState(0);
   const [below, setBelow] = useState(0);
@@ -78,7 +79,7 @@ export function CodeView({ location: l, viewType, marks, onReviewed, failure }: 
   const start = l.start_line ?? l.line;
   const side = l.side === "LEFT" ? "base" : "head";
   return (
-    <div style={{ marginTop: 16, padding: 6, borderRadius: 8, background: tint([l], marks) }}>
+    <div style={{ marginTop: 16, padding: 6, borderRadius: 8, background: tint(location.state) }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
         <span style={{ fontFamily: MONO, fontSize: 11, opacity: 0.7 }}>
           {l.path}:{start}

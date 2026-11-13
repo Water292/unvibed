@@ -5,7 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import "@xyflow/react/dist/style.css";
 import type { Graph } from "../../../shared/graph.ts";
 import { layout } from "../layout.ts";
-import { nodeBackground } from "../review-status.ts";
+import type { RenderedLocation } from "../rendered-location.ts";
+import { RenderedNode } from "./rendered-node.ts";
 
 const COLUMN_WIDTH = 340;
 const ROW_HEIGHT = 120;
@@ -25,16 +26,17 @@ function neighbourhood(graph: Graph, id: string): Set<string> {
 
 type Props = {
   graph: Graph;
-  /** Reviewed marks by hash, which tint each node. */
-  marks: ReadonlyMap<string, boolean>;
+  /** Each node's locations, by node id, which tint it. */
+  locations: ReadonlyMap<string, RenderedLocation[]>;
   selected: string | undefined;
   onSelect: (id: string | undefined) => void;
   /** Pixels on the right covered by something drawn over the canvas. */
   covered: number;
 };
 
-export function Flow({ graph, marks, selected, onSelect, covered }: Props) {
+export function Flow({ graph, locations, selected, onSelect, covered }: Props) {
   const cells = useMemo(() => layout(graph), [graph]);
+  const renderedNodes = useMemo(() => new Map(graph.nodes.map((n) => [n.id, new RenderedNode(n, locations.get(n.id)!)])), [graph, locations]);
   // The hovered node, else the selected one, is lit up with its links and
   // the nodes at their other ends; everything else fades back.
   const [hovered, setHovered] = useState<string>();
@@ -86,17 +88,16 @@ export function Flow({ graph, marks, selected, onSelect, covered }: Props) {
   }));
   // Lighting up and fading, and ticks, change each node's style, keeping the rest of it, measured size included.
   useEffect(() => {
-    const code = new Map(graph.nodes.map((n) => [n.id, n.code]));
     const style = (id: string) => ({
       width: NODE_WIDTH,
       // clicking opens the box's panel; React Flow gives selectable boxes this cursor, but ours aren't
       cursor: "pointer",
       opacity: active && !lit.has(id) ? DIM : 1,
-      ...nodeBackground(code.get(id)!, marks),
+      ...renderedNodes.get(id)!.background,
       ...(id === selected ? { borderColor: HIGHLIGHT, boxShadow: `0 0 0 1px ${HIGHLIGHT}` } : {}),
     });
     setNodes((nodes) => nodes.map((n) => ({ ...n, style: style(n.id) })));
-  }, [active, selected, marks]);
+  }, [active, selected, renderedNodes]);
 
   const edges: Edge[] = graph.edges.map((e) => {
     const back = isBack(e.from, e.to);
