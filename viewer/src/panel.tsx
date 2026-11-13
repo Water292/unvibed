@@ -1,9 +1,10 @@
 // The side panel for the selected node: its explanation, the nodes it links
-// to and from, and the code it points at, with a reviewed box on each
-// location.
+// to and from, and the code it points at, with an explanation and a
+// reviewed box on each location.
 import { useState, type PointerEvent } from "react";
 import type { Graph, Node } from "../../shared/graph.ts";
-import { CodeView } from "./code-view.tsx";
+import { groupLocationsByFile } from "./group.ts";
+import { LocationGroup } from "./code-view.tsx";
 import type { RenderedLocation } from "./rendered-location.ts";
 import { ViewType } from "./view-type.ts";
 
@@ -32,11 +33,11 @@ type Props = {
 
 export function Panel({ graph, node, locations, marks, onMark, onSelect, width, onWidth, viewType, onViewType }: Props) {
   // The last mark that couldn't be saved: which location, and why.
-  const [failure, setFailure] = useState<{ index: number; message: string }>();
-  const markAndReport = async (index: number, hash: string, reviewed: boolean) => {
+  const [failure, setFailure] = useState<{ locationId: string; message: string }>();
+  const markAndReport = async (locationId: string, hash: string, reviewed: boolean) => {
     setFailure(undefined);
     const message = await onMark(hash, reviewed);
-    if (message !== undefined) setFailure({ index, message });
+    if (message !== undefined) setFailure({ locationId, message });
   };
   // While the edge is being dragged only the panel follows it; the new width
   // is reported once, on release, so the canvas refits once rather than on
@@ -94,14 +95,15 @@ export function Panel({ graph, node, locations, marks, onMark, onSelect, width, 
         <p style={{ fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{node.text}</p>
         {links(incoming, "←")}
         {links(outgoing, "→")}
-        {locations.map((location, i) => (
-          <CodeView
-            key={`${node.id}:${i}`}
-            location={location}
+        {groupLocationsByFile(locations).map(({ path, locations }) => (
+          <LocationGroup
+            key={`${node.id}:${path}`}
+            path={path}
+            locations={locations}
             viewType={viewType}
             marks={marks}
-            onReviewed={(hash, r) => markAndReport(i, hash, r)}
-            failure={failure?.index === i ? failure.message : undefined}
+            onReviewed={markAndReport}
+            failure={failure}
           />
         ))}
       </aside>

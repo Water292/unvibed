@@ -4,8 +4,8 @@
 //
 // Starts Vite's development server (hot reload included) and answers
 // /graph.json with the chosen file, which can be anywhere on disk.
-// /code?path=&side=&start=&end=[&above=&below=] answers with those lines of a
-// file in the repo, diffed between --base (default: merge-base of origin/main
+// POST /code, with locations of the graph by id and how far ↑ / ↓ widened
+// each, answers with their lines of a file in the repo, as code boxes, diffed between --base (default: merge-base of origin/main
 // and HEAD) and --head (default: the working tree), read when asked, and
 // whether they're marked reviewed in this review: the one --review names,
 // else the branch --head names, else the branch checked out at startup.
@@ -14,16 +14,17 @@
 // The page gets nothing else from disk. It listens on --port, failing if
 // that's taken; without it, on the first free port from 4620.
 import { readFileSync } from "node:fs";
+import type { IncomingMessage } from "node:http";
 import { resolve } from "node:path";
 import { text } from "node:stream/consumers";
 import { parseArgs } from "node:util";
 import { createServer, type Plugin } from "vite";
 import { defaultBase, isRepoFile } from "./git.ts";
 import type { Graph } from "../shared/graph.ts";
-import { cutFor, EMPTY_CUT } from "./hunks.ts";
+import { codeFor } from "./hunks.ts";
 import { createTables, currentBranch, isBranch, mark } from "./review.ts";
 import { z } from "zod";
-import { CodeQuery, MarkRequest } from "../shared/graph-and-code.ts";
+import { CodeRequest, MarkRequest } from "../shared/graph-and-code.ts";
 
 const usage = "usage: node src/view.ts <graph.json> [--base <rev>] [--head <rev>] [--port <n>] [--review <name>]";
 let args;
@@ -65,6 +66,24 @@ function describeBranchChange(): string | undefined {
   return `${startingBranch ?? "a detached HEAD"} was checked out when the viewer started, ${branch ?? "a detached HEAD"} is now: check it out again or restart the viewer`;
 }
 
+/** The graph file, read fresh, or undefined if it can't be read. */
+function readGraph(): Graph | undefined {
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return undefined;
+  }
+}
+
+/** A request's body as JSON, or undefined if it isn't JSON: the schema it's checked against then refuses it. */
+async function readJson(req: IncomingMessage): Promise<unknown> {
+  try {
+    return JSON.parse(await text(req));
+  } catch {
+    return undefined;
+  }
+}
+
 const serveGraph: Plugin = {
   name: "serve-graph",
   configureServer(server) {
@@ -75,10 +94,8 @@ const serveGraph: Plugin = {
         res.end(branchChange);
         return;
       }
-      let graph: Graph;
-      try {
-        graph = JSON.parse(readFileSync(path, "utf8")); // read fresh on every request
-      } catch {
+      const graph = readGraph();
+      if (!graph) {
         res.statusCode = 404;
         res.end(`can't read ${path}`);
         return;
@@ -86,27 +103,52 @@ const serveGraph: Plugin = {
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify(graph));
     });
-    server.middlewares.use("/code", (req, res) => {
+    server.middlewares.use("/code", async (req, res) => {
+      if (req.method !== "POST") {
+        res.statusCode = 405;
+        res.end("POST the locations to show");
+        return;
+      }
+      const body = await readJson(req);
       const branchChange = describeBranchChange();
       if (branchChange) {
         res.statusCode = 409;
         res.end(branchChange);
         return;
       }
-      const query = CodeQuery.safeParse(Object.fromEntries(new URL(req.url ?? "", `http://${req.headers.host}`).searchParams));
-      if (!query.success) {
+      const request = CodeRequest.safeParse(body);
+      if (!request.success) {
         res.statusCode = 400;
-        res.end(z.prettifyError(query.error));
+        res.end(z.prettifyError(request.error));
         return;
       }
-      const { path: file, side, start, end, above, below } = query.data;
+      const graph = readGraph();
+      if (!graph) {
+        res.statusCode = 404;
+        res.end(`can't read ${path}`);
+        return;
+      }
+      // the request names locations by id; the graph has each one's file, side and lines
+      const locationsById = new Map(graph.nodes.flatMap((node) => node.code.map((location) => [location.id, location])));
+      const missing = request.data.locations.find(({ id }) => !locationsById.has(id));
+      if (missing) {
+        res.statusCode = 404;
+        res.end(`no location ${missing.id} in ${path}: it changed since the page loaded, so reload the page`);
+        return;
+      }
+      const widened = request.data.locations.map(({ id, above, below }) => ({ location: locationsById.get(id)!, above, below }));
+      const files = [...new Set(widened.map(({ location }) => location.path))];
+      if (files.length > 1) {
+        res.statusCode = 400;
+        res.end(`the locations are in ${files.length} files: ask for one file's at a time`);
+        return;
+      }
+      const file = files[0]!;
       try {
-        // only a file in the repo on that side is read; for anything else, an empty cut, as for a file that can't be read
-        const cut = isRepoFile(side === "LEFT" ? base : head, file)
-          ? cutFor(file, side, start, end, above, below, base, head, review)
-          : EMPTY_CUT;
+        // the file is read only in a version where it's in the repo; one where it isn't is treated as missing
+        const answer = codeFor(file, widened, base, head, review, { LEFT: isRepoFile(base, file), RIGHT: isRepoFile(head, file) });
         res.setHeader("content-type", "application/json");
-        res.end(JSON.stringify(cut));
+        res.end(JSON.stringify(answer));
       } catch (e) {
         res.statusCode = 500;
         res.end(`can't read the code: ${(e as Error).message}`);
@@ -118,12 +160,7 @@ const serveGraph: Plugin = {
         res.end("POST a mark");
         return;
       }
-      let body: unknown;
-      try {
-        body = JSON.parse(await text(req));
-      } catch {
-        body = undefined; // not JSON: the schema below refuses it
-      }
+      const body = await readJson(req);
       const branchChange = describeBranchChange();
       if (branchChange) {
         res.statusCode = 409;
