@@ -20,7 +20,7 @@ test.afterAll(() => viewer.stop());
 test("an ignored file on disk comes back as an empty cut, never its contents", async () => {
   // the handler checks the file before reading it; without the check, this would read secret.txt from disk
   const res = await fetch(`${viewer.url}code?path=secret.txt&side=RIGHT&start=1&end=1`);
-  expect(await res.json()).toEqual({ diff: "", moreAbove: false, moreBelow: false, hash: "", reviewed: false });
+  expect(await res.json()).toEqual({ diff: "", moreAbove: false, moreBelow: false, hash: "" });
 });
 
 test("no other page can read its answers", async () => {

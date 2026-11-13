@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import "./code-view.css";
 import type { CodeCut } from "../../shared/graph-and-code.ts";
 import type { Location } from "../../shared/graph.ts";
-import type { RenderedLocation } from "./rendered-location.ts";
+import { tint, type RenderedLocation } from "./rendered-location.ts";
 import { ViewType } from "./view-type.ts";
 
 const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
@@ -45,20 +45,18 @@ async function fetchCut(l: Location, above: number, below: number): Promise<Code
 }
 
 /**
- * marks: the marks made since the page loaded, by hash; the box is ticked by its code's hash there, else by what its
- * code came with. onReviewed: called with that hash when the box is ticked or cleared. failure: why the last tick couldn't be saved,
- * if it couldn't.
+ * location: ticked by the graph's hash for it, which is its code's hash whenever its code is shown. onReviewed: called
+ * with that hash when the box is ticked or cleared. failure: why the last tick couldn't be saved, if it couldn't.
  */
 type Props = {
   location: RenderedLocation;
   viewType: ViewType;
-  marks: ReadonlyMap<string, boolean>;
   onReviewed: (hash: string, reviewed: boolean) => void;
   failure: string | undefined;
 };
 
 /** The box keeps how many lines ↑ and ↓ have added (above, below) and shows the code it has until a wider cut arrives. */
-export function CodeView({ location, viewType, marks, onReviewed, failure }: Props) {
+export function CodeView({ location, viewType, onReviewed, failure }: Props) {
   const l = location.location;
   const dark = useDarkMode();
   const [above, setAbove] = useState(0);
@@ -82,7 +80,7 @@ export function CodeView({ location, viewType, marks, onReviewed, failure }: Pro
   // shown, and can't be ticked.
   const changedSinceGraph = cut !== undefined && cut.hash !== l.hash;
   return (
-    <div style={{ marginTop: 16 }}>
+    <div style={{ marginTop: 16, padding: 6, borderRadius: 8, background: tint(location.state) }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
         <span style={{ fontFamily: MONO, fontSize: 11, opacity: 0.7 }}>
           {l.path}:{start}
@@ -90,7 +88,7 @@ export function CodeView({ location, viewType, marks, onReviewed, failure }: Pro
         </span>
         {cut && !changedSinceGraph && (
           <label style={{ fontSize: 11 }}>
-            <input type="checkbox" checked={marks.get(cut.hash) ?? cut.reviewed} onChange={(e) => onReviewed(cut.hash, e.target.checked)} /> reviewed
+            <input type="checkbox" checked={location.ticked} onChange={(e) => onReviewed(l.hash, e.target.checked)} /> reviewed
           </label>
         )}
       </div>

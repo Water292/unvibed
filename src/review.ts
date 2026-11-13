@@ -47,15 +47,15 @@ export const isBranch = (name: string) => {
   }
 };
 
-/** Whether the lines with this hash are marked reviewed in a review. */
-export function isReviewed(review: string, hash: string): boolean {
-  return db.prepare("SELECT 1 FROM reviewed WHERE review = ? AND hash = ?").get(review, hash) !== undefined;
-}
-
 /** Marks the lines with this hash reviewed, or not, in a review. */
 export function mark(review: string, hash: string, reviewed: boolean): void {
   if (reviewed) db.prepare("INSERT OR IGNORE INTO reviewed (review, hash) VALUES (?, ?)").run(review, hash);
   else db.prepare("DELETE FROM reviewed WHERE review = ? AND hash = ?").run(review, hash);
+}
+
+/** The hashes of all the lines marked reviewed in a review. */
+export function reviewedHashes(review: string): string[] {
+  return db.prepare("SELECT hash FROM reviewed WHERE review = ?").all(review).map((r) => String(r.hash));
 }
 
 /** Unmarks everything in a review. */
