@@ -58,6 +58,11 @@ export function mark(review: string, hash: string, reviewed: boolean): void {
   else db.prepare("DELETE FROM reviewed WHERE review = ? AND hash = ?").run(review, hash);
 }
 
+/** The hashes of all the lines marked reviewed in a review. */
+export function reviewedHashes(review: string): string[] {
+  return db.prepare("SELECT hash FROM reviewed WHERE review = ?").all(review).map((r) => String(r.hash));
+}
+
 /** Unmarks everything in a review. */
 export function clearReview(review: string): void {
   db.prepare("DELETE FROM reviewed WHERE review = ?").run(review);

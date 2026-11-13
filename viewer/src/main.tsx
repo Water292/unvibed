@@ -7,10 +7,16 @@ import { Flow } from "./react-flow/flow.tsx";
 import { renderLocations } from "./rendered-location.ts";
 import { isViewType, ViewType } from "./view-type.ts";
 
-async function load(): Promise<Graph> {
-  const res = await fetch("/graph.json");
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+/** The graph, and the hashes of the lines already marked reviewed in this review. */
+async function load(): Promise<{ graph: Graph; reviewed: string[] }> {
+  const [graph, reviewed] = await Promise.all(
+    ["/graph.json", "/reviewed"].map(async (url) => {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }),
+  );
+  return { graph, reviewed };
 }
 
 /** Saves a mark; returns the server's message if it fails. */
@@ -54,10 +60,11 @@ function savePanelShare(share: number) {
 
 function App() {
   const [graph, setGraph] = useState<Graph>();
-  // The marks made since the page loaded, by hash: they outrank what a box's code came with, so every box with the
-  // same lines follows a tick, on screen or fetched later.
+  // The marks by hash: every hash marked reviewed when the page loaded, then the marks made since. They tick each
+  // location, which colours the canvas's nodes and the panel's boxes, and outrank what a box's code came with, so
+  // every box with the same lines follows a tick, on screen or fetched later.
   const [marks, setMarks] = useState<ReadonlyMap<string, boolean>>(new Map());
-  const locations = useMemo(() => graph && renderLocations(graph), [graph]);
+  const locations = useMemo(() => graph && renderLocations(graph, marks), [graph, marks]);
   const [error, setError] = useState<string>();
   const [selected, setSelected] = useState<string>();
   const [viewType, setViewType] = useState(savedViewType);
@@ -80,7 +87,7 @@ function App() {
   useEffect(() => {
     let current = true;
     load().then(
-      (g) => current && setGraph(g),
+      ({ graph, reviewed }) => current && (setGraph(graph), setMarks(new Map(reviewed.map((hash) => [hash, true])))),
       (e: Error) => current && setError(e.message),
     );
     return () => {
@@ -105,7 +112,7 @@ function App() {
   const width = clampPanelWidth(Math.round(share * windowWidth), windowWidth);
   return (
     <div style={{ position: "relative", height: "100%" }}>
-      <Flow graph={graph} selected={selected} onSelect={setSelected} covered={node ? width : 0} />
+      <Flow graph={graph} locations={locations} selected={selected} onSelect={setSelected} covered={node ? width : 0} />
       {node && (
         <Panel
           graph={graph}
