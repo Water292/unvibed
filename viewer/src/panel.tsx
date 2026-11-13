@@ -5,6 +5,7 @@ import { useState, type PointerEvent } from "react";
 import type { Graph, Node } from "../../shared/graph.ts";
 import { groupLocationsByFile } from "./group.ts";
 import { LocationGroup } from "./code-view.tsx";
+import type { RenderedLocation } from "./rendered-location.ts";
 import { ViewType } from "./view-type.ts";
 
 /** The panel floats over the right of the canvas, opening this many pixels wide in a window windowWidth wide; wider for a split diff, which shows base and head side by side. */
@@ -19,6 +20,8 @@ export const clampPanelWidth = (width: number, windowWidth: number) => Math.max(
 type Props = {
   graph: Graph;
   node: Node;
+  /** The node's locations, as shown. */
+  locations: RenderedLocation[];
   marks: ReadonlyMap<string, boolean>;
   onMark: (hash: string, reviewed: boolean) => Promise<string | undefined>;
   onSelect: (id: string | undefined) => void;
@@ -28,7 +31,7 @@ type Props = {
   onViewType: (viewType: ViewType) => void;
 };
 
-export function Panel({ graph, node, marks, onMark, onSelect, width, onWidth, viewType, onViewType }: Props) {
+export function Panel({ graph, node, locations, marks, onMark, onSelect, width, onWidth, viewType, onViewType }: Props) {
   // The last mark that couldn't be saved: which location, and why.
   const [failure, setFailure] = useState<{ locationId: string; message: string }>();
   const markAndReport = async (locationId: string, hash: string, reviewed: boolean) => {
@@ -92,7 +95,7 @@ export function Panel({ graph, node, marks, onMark, onSelect, width, onWidth, vi
         <p style={{ fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{node.text}</p>
         {links(incoming, "←")}
         {links(outgoing, "→")}
-        {groupLocationsByFile(node.code).map(({ path, locations }) => (
+        {groupLocationsByFile(locations).map(({ path, locations }) => (
           <LocationGroup
             key={`${node.id}:${path}`}
             path={path}

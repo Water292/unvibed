@@ -12,6 +12,7 @@ import "./code-view.css";
 import type { CodeAnswer, CodeBox, Own } from "../../shared/graph-and-code.ts";
 import type { Location } from "../../shared/graph.ts";
 import { startOf } from "./group.ts";
+import type { RenderedLocation } from "./rendered-location.ts";
 import { ViewType } from "./view-type.ts";
 
 const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
@@ -46,8 +47,8 @@ const sideName = (side: Location["side"]) => (side === "LEFT" ? "base" : "head")
 /** How many lines ↑ (above) and ↓ (below) have added to a location. */
 type Widen = { above: number; below: number };
 
-/** A location in a box, and its own lines as read with the box. */
-type Shown = { location: Location; own: Own };
+/** A location in a box, as the page shows it, and its own lines as read with the box. */
+type Shown = { rendered: RenderedLocation; own: Own };
 
 /**
  * path, locations: a file, and a node's locations in it (groupLocationsByFile). marks: the marks made since the page loaded, by
@@ -57,7 +58,7 @@ type Shown = { location: Location; own: Own };
  */
 type Props = {
   path: string;
-  locations: Location[];
+  locations: RenderedLocation[];
   viewType: ViewType;
   marks: ReadonlyMap<string, boolean>;
   onReviewed: (locationId: string, hash: string, reviewed: boolean) => void;
@@ -75,7 +76,7 @@ export function LocationGroup({ path, locations, ...rest }: Props) {
   // what's on screen stays there until the answer for a wider request arrives
   const [answer, setAnswer] = useState<CodeAnswer>();
   const [error, setError] = useState<string>();
-  const ats = locations.map((l) => [l.side, startOf(l), l.line, widen(l.id).above, widen(l.id).below].join(","));
+  const ats = locations.map(({ location: l }) => [l.side, startOf(l), l.line, widen(l.id).above, widen(l.id).below].join(","));
   const request = ats.join(" ");
   useEffect(() => {
     let current = true; // a newer request replaces this one's answer
@@ -96,13 +97,14 @@ export function LocationGroup({ path, locations, ...rest }: Props) {
       {error && <div style={{ fontSize: 12, opacity: 0.7, marginTop: 16 }}>{error}</div>}
       {answer?.boxes.map((box) => {
         // the box's locations, in the order they come in the file; the server names them by their place in the request
-        const items = box.items.map((i): Shown => ({ location: locations[i]!, own: answer.own[i]! }));
-        const first = items[0]!;
-        const last = items.at(-1)!;
+        const items = box.items.map((i): Shown => ({ rendered: locations[i]!, own: answer.own[i]! }));
+        // the graph's locations that ↑ and ↓ widen
+        const first = items[0]!.rendered.location;
+        const last = items.at(-1)!.rendered.location;
         return (
           <BoxView
             // a box keeps its first location as it takes in the next ones, so it keeps its place on screen
-            key={first.location.id}
+            key={first.id}
             box={box}
             items={items}
             path={path}
@@ -110,9 +112,9 @@ export function LocationGroup({ path, locations, ...rest }: Props) {
             // version of the file; and at least STEP past what was last asked for, so a click before the answer to
             // the one before still adds lines
             onUp={() =>
-              update(first.location.id, (w) => ({ ...w, above: Math.max(w.above, startOf(first.location) - box.from[first.location.side]) + STEP }))
+              update(first.id, (w) => ({ ...w, above: Math.max(w.above, startOf(first) - box.from[first.side]) + STEP }))
             }
-            onDown={() => update(last.location.id, (w) => ({ ...w, below: Math.max(w.below, box.to[last.location.side] - last.location.line) + STEP }))}
+            onDown={() => update(last.id, (w) => ({ ...w, below: Math.max(w.below, box.to[last.side] - last.line) + STEP }))}
             {...rest}
           />
         );
@@ -128,22 +130,22 @@ function BoxView({ box, items, path, onUp, onDown, viewType, marks, onReviewed, 
   const dark = useDarkMode();
   const header = (item: Shown) => (
     <LocationHeader
-      key={item.location.id}
-      location={item.location}
+      key={item.rendered.location.id}
+      location={item.rendered}
       own={item.own}
       marks={marks}
-      onReviewed={(hash, r) => onReviewed(item.location.id, hash, r)}
-      failure={failure?.locationId === item.location.id ? failure.message : undefined}
+      onReviewed={(hash, r) => onReviewed(item.rendered.location.id, hash, r)}
+      failure={failure?.locationId === item.rendered.location.id ? failure.message : undefined}
     />
   );
-  const first = items[0]!;
+  const first = items[0]!.rendered.location;
   // A later location's header sits under the line before its first line, in its own version of the file. The first
   // location's header is above the box, and so is any other's that starts where the first does or whose line before
   // isn't in the box.
-  const above = ({ location: l }: Shown) => startOf(l) - 1;
-  const inBox = (s: Shown) => box.from[s.location.side] > 0 && above(s) >= box.from[s.location.side];
-  const startsWithFirst = (s: Shown) => s.location.side === first.location.side && startOf(s.location) === startOf(first.location);
-  const top = items.filter((s) => s === first || startsWithFirst(s) || !inBox(s));
+  const above = (s: Shown) => startOf(s.rendered.location) - 1;
+  const inBox = (s: Shown) => box.from[s.rendered.location.side] > 0 && above(s) >= box.from[s.rendered.location.side];
+  const startsWithFirst = (s: Shown) => s.rendered.location.side === first.side && startOf(s.rendered.location) === startOf(first);
+  const top = items.filter((s) => s === items[0] || startsWithFirst(s) || !inBox(s));
   const inline = items.filter((s) => !top.includes(s));
   // The renderer rebuilds its rows whenever data or extendData is a new object, so each is made anew only when what it holds changes.
   const data = useMemo(() => ({ oldFile: { fileName: path }, newFile: { fileName: path }, hunks: box.diff ? [box.diff] : [] }), [path, box.diff]);
@@ -151,16 +153,16 @@ function BoxView({ box, items, path, onUp, onDown, viewType, marks, onReviewed, 
     // the renderer wants, for each line number in a version of the file, the data for the row under that line
     const rows = (side: Location["side"]) =>
       Object.fromEntries(
-        Object.entries(Object.groupBy(inline.filter((s) => s.location.side === side), above)).map(([line, data]) => [line, { data: data! }]),
+        Object.entries(Object.groupBy(inline.filter((s) => s.rendered.location.side === side), above)).map(([line, data]) => [line, { data: data! }]),
       );
     return { oldFile: rows("LEFT"), newFile: rows("RIGHT") };
-  }, [inline.map((s) => `${s.location.id}:${s.own.hash}:${s.own.reviewed}`).join(" ")]);
+  }, [inline.map((s) => `${s.rendered.location.id}:${s.own.hash}:${s.own.reviewed}`).join(" ")]);
   return (
     <div style={{ marginTop: 16 }}>
       {top.map(header)}
       <div className="code-view">
         {box.diff === "" ? (
-          <div style={{ padding: "6px 8px", opacity: 0.7 }}>can't read this file on the {sideName(first.location.side)} side</div>
+          <div style={{ padding: "6px 8px", opacity: 0.7 }}>can't read this file on the {sideName(first.side)} side</div>
         ) : (
           <>
             {box.moreAbove && <More arrow="↑" onClick={onUp} />}
@@ -185,7 +187,7 @@ function BoxView({ box, items, path, onUp, onDown, viewType, marks, onReviewed, 
 
 /** own: the location's own lines, read with its box's code. onReviewed, failure: as Props', for this location. */
 type HeaderProps = {
-  location: Location;
+  location: RenderedLocation;
   own: Own;
   marks: ReadonlyMap<string, boolean>;
   onReviewed: (hash: string, reviewed: boolean) => void;
@@ -193,7 +195,8 @@ type HeaderProps = {
 };
 
 /** A location's place, its reviewed box, and what its lines do. */
-function LocationHeader({ location: l, own, marks, onReviewed, failure }: HeaderProps) {
+function LocationHeader({ location, own, marks, onReviewed, failure }: HeaderProps) {
+  const l = location.location;
   const start = startOf(l);
   return (
     <div style={{ marginBottom: 4 }}>
