@@ -203,19 +203,12 @@ test.describe("marking code reviewed", () => {
     await expect(getReviewedCheckbox(page)).not.toBeChecked();
   });
 
-  test("ticking code that changed after the page showed it marks the lines on screen", async ({ page }) => {
-    await openBox(page, GREET_UUID, greetLineInPr);
-    // Saved while the page still shows the old line.
+  test("a location whose code changed since the graph was made isn't shown, and can't be ticked", async ({ page }) => {
     repo.write("app.ts", appWithEditedGreet);
-    await getReviewedCheckbox(page).click();
-    await expect(getReviewedCheckbox(page)).toBeChecked();
-
-    // After a reload the page shows the new line, which wasn't ticked.
-    await openBox(page, GREET_UUID, editedGreetLine);
-    await expect(getReviewedCheckbox(page)).not.toBeChecked();
-
-    repo.write("app.ts", HEAD);
-    await openBox(page, GREET_UUID, greetLineInPr);
-    await expect(getReviewedCheckbox(page)).toBeChecked();
+    await page.goto(viewer.url);
+    await box(page, GREET_UUID).click();
+    await expect(panel(page)).toContainText("This code changed since the graph was made, so it isn't shown");
+    await expect(panel(page)).not.toContainText(editedGreetLine);
+    await expect(getReviewedCheckbox(page)).toHaveCount(0);
   });
 });

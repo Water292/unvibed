@@ -78,6 +78,9 @@ export function CodeView({ location, viewType, marks, onReviewed, failure }: Pro
 
   const start = l.start_line ?? l.line;
   const side = l.side === "LEFT" ? "base" : "head";
+  // Code that changed since the graph was made doesn't have the graph's hash: the graph doesn't explain it, so it isn't
+  // shown, and can't be ticked.
+  const changedSinceGraph = cut !== undefined && cut.hash !== l.hash;
   return (
     <div style={{ marginTop: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
@@ -85,7 +88,7 @@ export function CodeView({ location, viewType, marks, onReviewed, failure }: Pro
           {l.path}:{start}
           {start !== l.line ? `-${l.line}` : ""} ({side})
         </span>
-        {cut && (
+        {cut && !changedSinceGraph && (
           <label style={{ fontSize: 11 }}>
             <input type="checkbox" checked={marks.get(cut.hash) ?? cut.reviewed} onChange={(e) => onReviewed(cut.hash, e.target.checked)} /> reviewed
           </label>
@@ -93,7 +96,10 @@ export function CodeView({ location, viewType, marks, onReviewed, failure }: Pro
       </div>
       {failure && <div style={{ fontSize: 11, color: "#dc2626", marginBottom: 4 }}>Couldn't save: {failure}</div>}
       {error && <div style={{ fontSize: 12, opacity: 0.7 }}>{error}</div>}
-      {cut && (
+      {changedSinceGraph && (
+        <div style={{ fontSize: 12, color: "#dc2626" }}>This code changed since the graph was made, so it isn't shown: update the graph.</div>
+      )}
+      {cut && !changedSinceGraph && (
         <div className="code-view">
           {cut.diff === "" ? (
             <div style={{ padding: "6px 8px", opacity: 0.7 }}>can't read this file on the {side} side</div>
