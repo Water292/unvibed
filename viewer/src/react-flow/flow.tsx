@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import "@xyflow/react/dist/style.css";
 import type { Graph } from "../../../shared/graph.ts";
 import { layout } from "../layout.ts";
+import { renderNodes } from "./rendered-node.ts";
 
 const COLUMN_WIDTH = 340;
 const ROW_HEIGHT = 120;
@@ -32,6 +33,7 @@ type Props = {
 
 export function Flow({ graph, selected, onSelect, covered }: Props) {
   const cells = useMemo(() => layout(graph), [graph]);
+  const renderedNodes = useMemo(() => renderNodes(graph), [graph]);
   // The hovered node, else the selected one, is lit up with its links and
   // the nodes at their other ends; everything else fades back.
   const [hovered, setHovered] = useState<string>();
@@ -55,7 +57,8 @@ export function Flow({ graph, selected, onSelect, covered }: Props) {
   // The nodes are kept in state, and React Flow's changes to them (each box's measured size, once drawn) are applied
   // to it, as React Flow expects: a node handed back without its measured size is hidden, and its links dropped,
   // until React Flow measures it again.
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>(graph.nodes.map((n) => {
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([...renderedNodes.values()].map((renderedNode) => {
+    const n = renderedNode.node;
     const cell = cells.get(n.id)!;
     // Each link's note is shown in the node it points to, not on the line.
     const incoming = graph.edges.filter((e) => e.to === n.id);
@@ -68,7 +71,7 @@ export function Flow({ graph, selected, onSelect, covered }: Props) {
             <div style={{ fontSize: 13, lineHeight: 1.35 }}>{n.title}</div>
             {incoming.map((e) => (
               <div key={e.id} style={{ fontSize: 11, opacity: 0.55, marginTop: 4 }}>
-                ← {graph.nodes.find((f) => f.id === e.from)?.title ?? e.from}
+                ← {renderedNodes.get(e.from)?.node.title ?? e.from}
                 {e.note ? `: ${e.note}` : ""}
               </div>
             ))}
