@@ -76,9 +76,9 @@ export function CodeView({ location, viewType, onReviewed, failure }: Props) {
 
   const start = l.start_line ?? l.line;
   const side = l.side === "LEFT" ? "base" : "head";
-  // The server checks the graph against the code when the page loads; code that changed since then no longer matches
-  // the graph's hash, so a tick here would mark lines nobody has seen. It can't be ticked until a reload.
-  const changedSinceLoad = cut !== undefined && cut.hash !== l.hash;
+  // Code that changed since the graph was made no longer has the graph's hash, and a tick saves the graph's hash, so
+  // ticking it would mark lines nobody saw as reviewed: it isn't shown, and can't be ticked.
+  const changedSinceGraph = cut !== undefined && cut.hash !== l.hash;
   return (
     <div style={{ marginTop: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
@@ -86,16 +86,18 @@ export function CodeView({ location, viewType, onReviewed, failure }: Props) {
           {l.path}:{start}
           {start !== l.line ? `-${l.line}` : ""} ({side})
         </span>
-        {cut && !changedSinceLoad && (
+        {cut && !changedSinceGraph && (
           <label style={{ fontSize: 11 }}>
             <input type="checkbox" checked={location.ticked} onChange={(e) => onReviewed(l.hash, e.target.checked)} /> reviewed
           </label>
         )}
-        {changedSinceLoad && <span style={{ fontSize: 11, color: "#dc2626" }}>changed since the graph loaded: reload</span>}
       </div>
       {failure && <div style={{ fontSize: 11, color: "#dc2626", marginBottom: 4 }}>Couldn't save: {failure}</div>}
       {error && <div style={{ fontSize: 12, opacity: 0.7 }}>{error}</div>}
-      {cut && (
+      {changedSinceGraph && (
+        <div style={{ fontSize: 12, color: "#dc2626" }}>This code changed since the graph was made, so it isn't shown: update the graph.</div>
+      )}
+      {cut && !changedSinceGraph && (
         <div className="code-view">
           {cut.diff === "" ? (
             <div style={{ padding: "6px 8px", opacity: 0.7 }}>can't read this file on the {side} side</div>

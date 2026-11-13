@@ -3,9 +3,7 @@
 //   node src/view.ts <graph.json> [--base <rev>] [--head <rev>] [--port <n>] [--review <name>]
 //
 // Starts Vite's development server (hot reload included) and answers
-// /graph.json with the chosen file, which can be anywhere on disk, once it
-// matches the code: a graph whose locations no longer match their diff between
-// --base and --head is refused, with a list of what doesn't match.
+// /graph.json with the chosen file, which can be anywhere on disk.
 // /code?path=&side=&start=&end=[&above=&below=] answers with those lines of a
 // file in the repo, diffed between --base (default: merge-base of origin/main
 // and HEAD) and --head (default: the working tree), read when asked, and
@@ -21,7 +19,6 @@ import { resolve } from "node:path";
 import { text } from "node:stream/consumers";
 import { parseArgs } from "node:util";
 import { createServer, type Plugin } from "vite";
-import { check, describeProblem, readAt } from "./check.ts";
 import { defaultBase, isRepoFile } from "./git.ts";
 import type { Graph } from "../shared/graph.ts";
 import { cutFor, EMPTY_CUT } from "./hunks.ts";
@@ -85,20 +82,6 @@ const serveGraph: Plugin = {
       } catch {
         res.statusCode = 404;
         res.end(`can't read ${path}`);
-        return;
-      }
-      // A tick saves the graph's hash for a location, so a graph that no longer matches the code would let code
-      // nobody saw be marked reviewed: it isn't shown at all.
-      const problems = check(graph, readAt(base, head));
-      if (problems.length) {
-        const titleOf = new Map(graph.nodes.map((n) => [n.id, n.title]));
-        res.statusCode = 409;
-        res.end(
-          [
-            `The graph doesn't match the code, so it isn't shown. Update it (mise run graph check lists what it should hold), then reload. These locations don't match their code:`,
-            ...problems.map((p) => `✗ ${describeProblem(p, titleOf.get(p.node)!)}`),
-          ].join("\n"),
-        );
         return;
       }
       res.setHeader("content-type", "application/json");

@@ -1,23 +1,9 @@
 import { z } from "zod";
 import type { Graph, Location } from "../shared/graph.ts";
-import { show } from "./git.ts";
 import { getChanges, hashLines, ownRows, splitLines } from "./hunks.ts";
 
 /** Reads a file's contents on one side of the diff; undefined if it doesn't exist there. */
 export type ReadFile = (side: Location["side"], path: string) => string | undefined;
-
-/**
- * Reads LEFT files at base and RIGHT files at head (the working tree if undefined), each file once per side, so a
- * check of many locations in one file runs git for it only once.
- */
-export function readAt(base: string, head: string | undefined): ReadFile {
-  const contents = new Map<string, string | undefined>();
-  return (side, path) => {
-    const key = `${side}:${path}`;
-    if (!contents.has(key)) contents.set(key, show(side === "LEFT" ? base : head, path));
-    return contents.get(key);
-  };
-}
 
 export type Problem = {
   node: string;
@@ -75,15 +61,6 @@ export function check(graph: Graph, read: ReadFile): Problem[] {
   }
   return problems;
 }
-
-const REASONS: Record<Problem["reason"], string> = {
-  "missing-file": "its file isn't there",
-  "out-of-range": "its lines run past the end of the file",
-  "hash-mismatch": "its lines changed",
-  "count-mismatch": "its added and removed counts are wrong",
-};
-/** A problem in words, for whoever reads the graph: which location, in which node, and what's wrong with it. */
-export const describeProblem = (p: Problem, title: string) => `${p.path}:${p.start_line}-${p.line} (${p.side}) in "${title}": ${REASONS[p.reason]}`;
 
 /** An RFC 9562 UUID: any version from 1 to 8, or the all-zero or all-f one. */
 const UUID = z.uuid();

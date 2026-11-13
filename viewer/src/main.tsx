@@ -94,7 +94,7 @@ function App() {
     };
   }, []);
 
-  if (error) return <p style={{ padding: 16, fontFamily: "system-ui", whiteSpace: "pre-wrap" }}>{error}</p>;
+  if (error) return <p style={{ padding: 16, fontFamily: "system-ui" }}>{error}</p>;
   if (!graph || !locations) return null;
   const node = graph.nodes.find((n) => n.id === selected);
   // Saves the mark, then records it here, which ticks every location with the same lines. Returns why it couldn't be
