@@ -11,12 +11,12 @@ const lines = Array.from({ length: 60 }, (_, i) => `line ${i + 1}`);
 const BASE = lines.join("\n") + "\n";
 const HEAD = BASE.replace("line 5\n", "LINE FIVE\n").replace("line 40\n", "LINE FORTY\n");
 
-// The places the nodes point at. Each is a function because every location in a graph needs its own id, so a node
-// gets its own copy. A location's hash is of its own rows: each line removed, marked -, then each line added, marked +.
+// The places the nodes point at, without their ids: every location in a graph needs its own id, so each node adds a
+// new one where it uses a place. A location's hash is of its own rows: each line removed, marked -, then each line
+// added, marked +.
 
 /** Line 5 after the change. */
-const five = (): Location => ({
-  id: randomUUID(),
+const LINE_FIVE: Omit<Location, "id"> = {
   path: "long.txt",
   side: "RIGHT",
   line: 5,
@@ -24,11 +24,10 @@ const five = (): Location => ({
   added: 1,
   removed: 1,
   text: "Five, shouted.",
-});
+};
 
 /** Line 40 after the change. */
-const forty = (): Location => ({
-  id: randomUUID(),
+const LINE_FORTY: Omit<Location, "id"> = {
   path: "long.txt",
   side: "RIGHT",
   line: 40,
@@ -36,11 +35,10 @@ const forty = (): Location => ({
   added: 1,
   removed: 1,
   text: "Forty, shouted.",
-});
+};
 
 /** Line 40 before the change: the line the change removed. */
-const oldForty = (): Location => ({
-  id: randomUUID(),
+const REMOVED_LINE_FORTY: Omit<Location, "id"> = {
   path: "long.txt",
   side: "LEFT",
   line: 40,
@@ -48,11 +46,10 @@ const oldForty = (): Location => ({
   added: 0,
   removed: 1,
   text: "The old forty, gone.",
-});
+};
 
 /** Line 1 of short.txt after the change. */
-const shortA = (): Location => ({
-  id: randomUUID(),
+const SHORT_FILE_LINE_ONE: Omit<Location, "id"> = {
   path: "short.txt",
   side: "RIGHT",
   line: 1,
@@ -60,7 +57,7 @@ const shortA = (): Location => ({
   added: 1,
   removed: 1,
   text: "A, shouted.",
-});
+};
 
 const NODE_UUID = randomUUID();
 const BOTH_SIDES_UUID = randomUUID();
@@ -68,10 +65,34 @@ const TWO_FILES_UUID = randomUUID();
 const graph: Graph = {
   schema: "test",
   nodes: [
-    // listed last line first: the panel shows them in the file's order
-    { id: NODE_UUID, title: "two changes", text: "", code: [forty(), five()] },
-    { id: BOTH_SIDES_UUID, title: "a change, and a line it removed", text: "", code: [five(), oldForty()] },
-    { id: TWO_FILES_UUID, title: "a change in each of two files", text: "", code: [five(), shortA()] },
+    {
+      id: NODE_UUID,
+      title: "two changes",
+      text: "",
+      // listed last line first: the panel shows them in the file's order
+      code: [
+        { ...LINE_FORTY, id: randomUUID() },
+        { ...LINE_FIVE, id: randomUUID() },
+      ],
+    },
+    {
+      id: BOTH_SIDES_UUID,
+      title: "a change, and a line it removed",
+      text: "",
+      code: [
+        { ...LINE_FIVE, id: randomUUID() },
+        { ...REMOVED_LINE_FORTY, id: randomUUID() },
+      ],
+    },
+    {
+      id: TWO_FILES_UUID,
+      title: "a change in each of two files",
+      text: "",
+      code: [
+        { ...LINE_FIVE, id: randomUUID() },
+        { ...SHORT_FILE_LINE_ONE, id: randomUUID() },
+      ],
+    },
   ],
   edges: [],
 };
