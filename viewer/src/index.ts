@@ -2,3 +2,4 @@
 export { GraphReview } from "./graph-review.tsx";
 export type { AskableProps, Host } from "./host.tsx";
 export type { Offsets, Place, ThreadItem, Threads } from "./threads.tsx";
+export type { Graph } from "../../shared/graph.ts";
