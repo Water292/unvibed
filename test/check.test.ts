@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { expect, test } from "vitest";
-import { check, checkIds, type ReadFile } from "../src/check.ts";
+import { check, checkEdgeEnds, checkIds, type ReadFile } from "../src/check.ts";
 import { hashLines } from "../src/hunks.ts";
 import type { Graph } from "../shared/graph.ts";
 
@@ -78,5 +78,19 @@ test("every node, edge and location has a UUID of its own", () => {
     { kind: "edge", reason: "duplicate" },
     { kind: "edge", reason: "duplicate" },
     { kind: "location", id: undefined, reason: "not-a-uuid" },
+  ]);
+});
+
+test("every edge joins two of the graph's nodes", () => {
+  const node = graph.nodes[0]!;
+  const ok: Graph = { ...graph, edges: [{ id: randomUUID(), from: node.id, to: node.id }] };
+  expect(checkEdgeEnds(ok)).toEqual([]);
+
+  const [gone, alsoGone, edge] = [randomUUID(), randomUUID(), randomUUID()];
+  const leftOver: Graph = { ...graph, edges: [{ id: edge, from: node.id, to: gone }, { id: randomUUID(), from: alsoGone, to: gone }] };
+  expect(checkEdgeEnds(leftOver)).toEqual([
+    { id: edge, end: "to", nodeId: gone },
+    { id: leftOver.edges[1]!.id, end: "from", nodeId: alsoGone },
+    { id: leftOver.edges[1]!.id, end: "to", nodeId: gone },
   ]);
 });

@@ -94,3 +94,19 @@ export function checkIds(graph: Graph): IdProblem[] {
         : [],
   );
 }
+
+export type EdgeEndProblem = {
+  /** The edge's id. */
+  id: string;
+  /** Which end names a node the graph doesn't have, and the id it names. */
+  end: "from" | "to";
+  nodeId: string;
+};
+
+/** Every end of an edge that names a node the graph doesn't have, as an edge left over from a bigger graph would. */
+export function checkEdgeEnds(graph: Graph): EdgeEndProblem[] {
+  const nodeIds = new Set(graph.nodes.map((n) => n.id));
+  return graph.edges.flatMap((e) =>
+    (["from", "to"] as const).filter((end) => !nodeIds.has(e[end])).map((end) => ({ id: e.id, end, nodeId: e[end] })),
+  );
+}

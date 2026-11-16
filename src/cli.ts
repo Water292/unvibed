@@ -4,12 +4,12 @@
 //
 // Compares each location's diff with the hash and counts the graph stores,
 // and prints what they should be where they don't match; and checks that every
-// node, edge and location has its own UUID.
+// node, edge and location has its own UUID, and that every edge joins two of the graph's nodes.
 // LEFT locations are read at --base (default: merge-base of origin/main and HEAD),
 // RIGHT locations at --head (default: the working tree).
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
-import { check, checkIds, type ReadFile } from "./check.ts";
+import { check, checkEdgeEnds, checkIds, type ReadFile } from "./check.ts";
 import { defaultBase, show } from "./git.ts";
 import type { Graph } from "../shared/graph.ts";
 
@@ -49,7 +49,16 @@ function main(argv: string[]): number {
   for (const p of idProblems)
     console.log(`✗ ${p.kind} ${p.what}: ${p.id === undefined ? "has no id" : `id ${JSON.stringify(p.id)} ${p.reason === "duplicate" ? "is used more than once" : "isn't a UUID"}`}`);
   if (idProblems.length) console.log(`${idProblems.length} ids aren't UUIDs of their own`);
-  return problems.length || idProblems.length ? 1 : 0;
+
+  const titleOf = new Map(graph.nodes.map((n) => [n.id, n.title]));
+  const edgeEndProblems = checkEdgeEnds(graph);
+  for (const p of edgeEndProblems) {
+    const edge = graph.edges.find((e) => e.id === p.id)!;
+    const other = p.end === "from" ? edge.to : edge.from;
+    console.log(`✗ edge ${JSON.stringify(p.id)} (${p.end === "from" ? "into" : "out of"} "${titleOf.get(other) ?? other}"): its ${p.end} node ${JSON.stringify(p.nodeId)} isn't in the graph`);
+  }
+  if (edgeEndProblems.length) console.log(`${edgeEndProblems.length} edge ends name nodes the graph doesn't have`);
+  return problems.length || idProblems.length || edgeEndProblems.length ? 1 : 0;
 }
 
 process.exitCode = main(process.argv.slice(2));
