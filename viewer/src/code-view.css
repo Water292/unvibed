@@ -32,10 +32,3 @@
   background: Canvas;
   color: CanvasText;
 }
-/* A later location's header, drawn inside a box whose lines ran into its own. */
-.code-view-inline {
-  padding: 8px 8px 4px;
-  border-top: 2px dashed rgba(128, 128, 128, 0.45);
-  background: rgba(128, 128, 128, 0.06);
-  white-space: normal;
-}

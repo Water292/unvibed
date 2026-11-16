@@ -3,7 +3,7 @@
 // locations in the same file on the same side are one group; each location
 // has its explanation above its lines. ↑ and ↓ widen a location by 20 lines,
 // and once a location's lines reach its neighbour's, the two are drawn as one
-// box, the second's explanation sitting at the line it starts on.
+// box, the second's header and explanation between its lines and the first's.
 import { DiffModeEnum, DiffView } from "@git-diff-view/react";
 import "@git-diff-view/react/styles/diff-view-pure.css";
 import { useEffect, useState } from "react";
@@ -78,6 +78,47 @@ export function blend(group: Indexed[], widen: (i: number) => Widen): Indexed[][
     shownEnd = Math.max(shownEnd, item.location.line + CONTEXT + w.below);
   }
   return segments;
+}
+
+/**
+ * A cut's diff cut again before each of starts (first lines, on side), each piece a diff of its own, so each location
+ * after the first gets its header between pieces. A location owns the other side's lines listed just before its first
+ * line, as ownRows has it.
+ */
+export function splitDiff(diff: string, side: Location["side"], starts: number[]): string[] {
+  const lines = diff.replace(/\n$/, "").split("\n");
+  const at = lines.findIndex((l) => l.startsWith("@@"));
+  const match = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(lines[at] ?? "");
+  if (!match) return [diff];
+  // each row with the old and new line numbers it's at; a line on one side only has -1 on the other
+  let oldLine = Number(match[1]);
+  let newLine = Number(match[2]);
+  const rows = lines.slice(at + 1).map((text) => {
+    const onOld = text[0] === " " || text[0] === "-";
+    const onNew = text[0] === " " || text[0] === "+";
+    const row = { text, old: onOld ? oldLine : -1, new: onNew ? newLine : -1, nextOld: oldLine, nextNew: newLine };
+    if (onOld) oldLine++;
+    if (onNew) newLine++;
+    return row;
+  });
+  const lineOf = (r: (typeof rows)[number]) => (side === "LEFT" ? r.old : r.new);
+  const cuts = starts.map((start) => {
+    let cut = rows.findIndex((r) => lineOf(r) >= start);
+    if (cut < 0) cut = rows.length;
+    while (cut > 0 && lineOf(rows[cut - 1]!) < 0) cut--;
+    return cut;
+  });
+  const bounds = [0, ...cuts, rows.length];
+  return bounds.slice(1).map((end, i) => {
+    const piece = rows.slice(bounds[i], Math.max(bounds[i]!, end));
+    if (!piece.length) return "";
+    const olds = piece.filter((r) => r.old > 0).length;
+    const news = piece.filter((r) => r.new > 0).length;
+    // a side with no lines in the piece names the line before it, as git does
+    const oldStart = olds ? piece[0]!.nextOld : piece[0]!.nextOld - 1;
+    const newStart = news ? piece[0]!.nextNew : piece[0]!.nextNew - 1;
+    return [...lines.slice(0, at), `@@ -${oldStart},${olds} +${newStart},${news} @@`, ...piece.map((r) => r.text)].join("\n") + "\n";
+  });
 }
 
 type Props = {
@@ -169,44 +210,48 @@ function Segment({ nodeId, segment, above, below, onMore, viewType, onReviewed, 
       nodeId={nodeId}
     />
   );
-  // every location after the first sits under the line before its own first line
-  const fileKey = side === "LEFT" ? "oldFile" : "newFile";
-  const extend: Record<string, { data: Indexed }> = {};
-  for (const item of segment.slice(1)) extend[String(Math.max(1, startOf(item.location) - 1))] = { data: item };
-  const where = segment.map((s) => `${path}:${startOf(s.location)}-${s.location.line}`).join(", ");
+  // the cut, cut again where each location after the first starts, so its header sits between the pieces
+  const pieces = cut && cut.diff !== "" ? splitDiff(cut.diff, side, segment.slice(1).map((s) => startOf(s.location))) : [];
   return (
     <>
     <div
       data-testid="segment"
       style={{ marginTop: 16, padding: 6, borderRadius: 8, background: tint(stateOf(segment)) }}
     >
-      {header(segment[0]!)}
       {error && <div style={{ fontSize: 12, opacity: 0.7 }}>{error}</div>}
-      {cut && !anyChanged && (
-        <Askable anchor={`loc:${nodeId}#${segment[0]!.index}`} context={`Code in ${where} (${sideName} side), in graph node ${nodeId}`} style={{ all: "unset", display: "block" }}>
-        <div className="code-view">
-          {cut.diff === "" ? (
-            <div style={{ padding: "6px 8px", opacity: 0.7 }}>can't read this file on the {sideName} side</div>
-          ) : (
-            <>
-              {cut.moreAbove && <More arrow="↑" onClick={() => onMore("above")} />}
-              <DiffView<Indexed>
-                data={{ oldFile: { fileName: path }, newFile: { fileName: path }, hunks: [cut.diff] }}
-                extendData={{ [fileKey]: extend }}
-                // split view asks for both sides' rows; only the location's own side has one
-                renderExtendLine={({ data }) => (data ? <div className="code-view-inline">{header(data)}</div> : null)}
-                diffViewMode={viewType === ViewType.Split ? DiffModeEnum.Split : DiffModeEnum.Unified}
-                diffViewWrap={false}
-                diffViewHighlight={false}
-                diffViewTheme={dark ? "dark" : "light"}
-                diffViewFontSize={12}
-              />
-              {cut.moreBelow && <More arrow="↓" onClick={() => onMore("below")} />}
-            </>
+      {segment.map((item, i) => (
+        <div key={item.index} style={{ marginTop: i ? 10 : 0 }}>
+          {header(item)}
+          {cut && !anyChanged && (
+            <Askable
+              anchor={`loc:${nodeId}#${item.index}`}
+              context={`Code in ${path}:${startOf(item.location)}-${item.location.line} (${sideName} side), in graph node ${nodeId}`}
+              style={{ all: "unset", display: "block" }}
+            >
+              <div className="code-view">
+                {cut.diff === "" ? (
+                  <div style={{ padding: "6px 8px", opacity: 0.7 }}>can't read this file on the {sideName} side</div>
+                ) : (
+                  <>
+                    {i === 0 && cut.moreAbove && <More arrow="↑" onClick={() => onMore("above")} />}
+                    {pieces[i] && (
+                      <DiffView
+                        data={{ oldFile: { fileName: path }, newFile: { fileName: path }, hunks: [pieces[i]!] }}
+                        diffViewMode={viewType === ViewType.Split ? DiffModeEnum.Split : DiffModeEnum.Unified}
+                        diffViewWrap={false}
+                        diffViewHighlight={false}
+                        diffViewTheme={dark ? "dark" : "light"}
+                        diffViewFontSize={12}
+                      />
+                    )}
+                    {i === segment.length - 1 && cut.moreBelow && <More arrow="↓" onClick={() => onMore("below")} />}
+                  </>
+                )}
+              </div>
+            </Askable>
           )}
         </div>
-        </Askable>
-      )}
+      ))}
     </div>
     {segment.map((s) => (
       <Threads key={s.index} anchor={`loc:${nodeId}#${s.index}`} />
