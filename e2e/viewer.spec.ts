@@ -4,7 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { clearReview, createTables } from "../src/review.ts";
 import type { Graph } from "../shared/graph.ts";
 import { tempRepo } from "../test/temp-repo.ts";
-import { hashLines } from "../src/hunks.ts";
+import { hashRows } from "../src/hunks.ts";
 import { startViewer } from "./start-viewer.ts";
 
 // app.ts at the base and at the head: the head replaces greet's line; add and version don't change.
@@ -16,9 +16,9 @@ const [GREET_UUID, ADD_UUID, VERSION_UUID] = [randomUUID(), randomUUID(), random
 const graph: Graph = {
   schema: "test",
   nodes: [
-    { id: GREET_UUID, title: "greet says hi", text: "The greeting is shorter now.", code: [{ id: randomUUID(), path: "app.ts", side: "RIGHT", line: 2, hash: hashLines(['-  return "hello " + name;', '+  return "hi " + name;']), added: 1, removed: 1, text: "" }] },
-    { id: ADD_UUID, title: "add sums two numbers", text: "Unchanged, shown for context.", code: [{ id: randomUUID(), path: "app.ts", side: "RIGHT", start_line: 5, line: 7, hash: hashLines([" export function add(a: number, b: number) {", "   return a + b;", " }"]), added: 0, removed: 0, text: "" }] },
-    { id: VERSION_UUID, title: "the version", text: "Still 1.", code: [{ id: randomUUID(), path: "app.ts", side: "RIGHT", line: 9, hash: hashLines([" export const version = 1;"]), added: 0, removed: 0, text: "" }] },
+    { id: GREET_UUID, title: "greet says hi", text: "The greeting is shorter now.", code: [{ id: randomUUID(), path: "app.ts", side: "RIGHT", line: 2, hash: hashRows(['-  return "hello " + name;', '+  return "hi " + name;']), added: 1, removed: 1, text: "" }] },
+    { id: ADD_UUID, title: "add sums two numbers", text: "Unchanged, shown for context.", code: [{ id: randomUUID(), path: "app.ts", side: "RIGHT", start_line: 5, line: 7, hash: hashRows([" export function add(a: number, b: number) {", "   return a + b;", " }"]), added: 0, removed: 0, text: "" }] },
+    { id: VERSION_UUID, title: "the version", text: "Still 1.", code: [{ id: randomUUID(), path: "app.ts", side: "RIGHT", line: 9, hash: hashRows([" export const version = 1;"]), added: 0, removed: 0, text: "" }] },
   ],
   edges: [
     { id: randomUUID(), from: GREET_UUID, to: ADD_UUID },

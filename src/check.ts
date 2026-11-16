@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Graph, Location } from "../shared/graph.ts";
-import { getChanges, hashLines, ownRows, splitLines } from "./hunks.ts";
+import { getChanges, hashRows, ownRows, splitLines } from "./hunks.ts";
 
 /** Reads a file's contents on one side of the diff; undefined if it doesn't exist there. */
 export type ReadFile = (side: Location["side"], path: string) => string | undefined;
@@ -37,7 +37,7 @@ function rowsReader(read: ReadFile) {
 /** What a graph stores about a location's rows: their hash, and how many were added and removed. */
 type Diff = { hash: string; added: number; removed: number };
 export const diffOf = (rows: string[]): Diff => ({
-  hash: hashLines(rows),
+  hash: hashRows(rows),
   added: rows.filter((r) => r.startsWith("+")).length,
   removed: rows.filter((r) => r.startsWith("-")).length,
 });

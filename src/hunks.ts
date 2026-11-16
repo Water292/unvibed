@@ -20,6 +20,12 @@ export function hashLines(lines: string[]): string {
   return createHash("sha1").update(`blob ${content.length}\0`).update(content).digest("hex");
 }
 
+/**
+ * The hash of a location's own rows: each row's marker (+, - or space) with its text's whitespace taken out, hashed with
+ * hashLines. Re-indenting a location's lines, or a formatter's spacing, keeps its hash, as Unvibe's hunk hash does.
+ */
+export const hashRows = (rows: string[]): string => hashLines(rows.map((r) => r[0] + r.slice(1).replace(/\s+/g, "")));
+
 export function splitLines(text: string): string[] {
   const lines = text.split("\n");
   if (lines.at(-1) === "") lines.pop();
@@ -124,7 +130,7 @@ export function cutFor(path: string, side: Location["side"], start: number, end:
   const changes = getChanges(before, after);
   const own = ownRows(changes, side, start, end);
   const cut = hunkIn(changes, side, start, end, above, below);
-  const hash = own.length ? hashLines(own) : "";
+  const hash = own.length ? hashRows(own) : "";
   return {
     diff: diffText(path, cut),
     moreAbove: cut.length > 0 && cut[0] !== changes[0],

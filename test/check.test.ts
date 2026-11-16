@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { expect, test } from "vitest";
 import { check, checkEdgeEnds, checkIds, type ReadFile } from "../src/check.ts";
-import { hashLines } from "../src/hunks.ts";
+import { hashLines, hashRows } from "../src/hunks.ts";
 import type { Graph } from "../shared/graph.ts";
 
 // One node explaining lines 2\u20133 of a file: "two" replaced "zwei", "three" didn't change.
@@ -13,7 +13,7 @@ const graph: Graph = {
       id: randomUUID(),
       title: "t",
       text: "",
-      code: [{ id: randomUUID(), path: "example.ts", side: "RIGHT", start_line: 2, line: 3, hash: hashLines(["-zwei", "+two", " three"]), added: 1, removed: 1, text: "" }],
+      code: [{ id: randomUUID(), path: "example.ts", side: "RIGHT", start_line: 2, line: 3, hash: hashRows(["-zwei", "+two", " three"]), added: 1, removed: 1, text: "" }],
     },
   ],
   edges: [],
@@ -29,13 +29,23 @@ test("the hash is git's blob hash of the lines", () => {
   expect(hashLines(lines)).toBe(git);
 });
 
+test("a location's hash ignores whitespace in its rows, but not which rows were added or removed", () => {
+  expect(hashRows(["-zwei", "+  two", " three"])).toBe(hashRows(["-zwei", "+two", " three"]));
+  expect(hashRows(["-zwei", "+two", " three"])).not.toBe(hashRows(["-zwei", "+tw0", " three"]));
+  expect(hashRows([" two"])).not.toBe(hashRows(["+two"]));
+});
+
+test("re-indented code still passes", () => {
+  expect(check(graph, sides(BASE, "one\n    two\nthree\nfour\n"))).toEqual([]);
+});
+
 test("untouched code passes", () => {
   expect(check(graph, sides(BASE, HEAD))).toEqual([]);
 });
 
 test("editing a line the node explains fails, showing the rows now", () => {
   expect(check(graph, sides(BASE, "one\nTWO\nthree\nfour\n"))).toMatchObject([
-    { reason: "hash-mismatch", actual: ["-zwei", "+TWO", " three"], expected: { hash: hashLines(["-zwei", "+TWO", " three"]), added: 1, removed: 1 } },
+    { reason: "hash-mismatch", actual: ["-zwei", "+TWO", " three"], expected: { hash: hashRows(["-zwei", "+TWO", " three"]), added: 1, removed: 1 } },
   ]);
 });
 

@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { expect, test } from "vitest";
-import { hashLines } from "../src/hunks.ts";
+import { hashRows } from "../src/hunks.ts";
 import type { Graph } from "../shared/graph.ts";
 import { tempRepo } from "./temp-repo.ts";
 
@@ -28,9 +28,9 @@ test("check reads LEFT at the base and RIGHT at the head, and without flags the 
   const graph: Graph = {
     schema: "test",
     nodes: [
-      { id: randomUUID(), title: "", text: "", code: [{ id: randomUUID(), path: "a.txt", side: "LEFT", line: 2, hash: hashLines(["-two"]), added: 0, removed: 1, text: "" }] },
-      { id: randomUUID(), title: "", text: "", code: [{ id: randomUUID(), path: "a.txt", side: "RIGHT", line: 2, hash: hashLines(["-two", "+TWO"]), added: 1, removed: 1, text: "" }] },
-      { id: randomUUID(), title: "", text: "", code: [{ id: randomUUID(), path: "b.txt", side: "RIGHT", line: 1, hash: hashLines([" kept"]), added: 0, removed: 0, text: "" }] },
+      { id: randomUUID(), title: "", text: "", code: [{ id: randomUUID(), path: "a.txt", side: "LEFT", line: 2, hash: hashRows(["-two"]), added: 0, removed: 1, text: "" }] },
+      { id: randomUUID(), title: "", text: "", code: [{ id: randomUUID(), path: "a.txt", side: "RIGHT", line: 2, hash: hashRows(["-two", "+TWO"]), added: 1, removed: 1, text: "" }] },
+      { id: randomUUID(), title: "", text: "", code: [{ id: randomUUID(), path: "b.txt", side: "RIGHT", line: 1, hash: hashRows([" kept"]), added: 0, removed: 0, text: "" }] },
     ],
     edges: [],
   };
