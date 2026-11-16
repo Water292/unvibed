@@ -6,10 +6,11 @@ import "@xyflow/react/dist/style.css";
 import type { Graph } from "../../../shared/graph.ts";
 import { layout } from "../layout.ts";
 import type { RenderedLocation } from "../rendered-location.ts";
+import { riskiest, RiskLine } from "../risk.tsx";
 import { renderNodes } from "./rendered-node.ts";
 
-const COLUMN_WIDTH = 340;
-const ROW_HEIGHT = 120;
+const COLUMN_WIDTH = 380;
+const ROW_HEIGHT = 180;
 const NODE_WIDTH = 270;
 const HIGHLIGHT = "#2563eb";
 const DIM = 0.25;
@@ -32,9 +33,11 @@ type Props = {
   onSelect: (id: string | undefined) => void;
   /** Pixels on the right covered by something drawn over the canvas. */
   covered: number;
+  /** How many threads are staged in each node, by id. */
+  staged: ReadonlyMap<string, number>;
 };
 
-export function Flow({ graph, locations, selected, onSelect, covered }: Props) {
+export function Flow({ graph, locations, selected, onSelect, covered, staged }: Props) {
   const cells = useMemo(() => layout(graph), [graph]);
   const renderedNodes = useMemo(() => renderNodes(graph, locations), [graph, locations]);
   // The hovered node, else the selected one, is lit up with its links and
@@ -60,27 +63,39 @@ export function Flow({ graph, locations, selected, onSelect, covered }: Props) {
   // The nodes are kept in state, and React Flow's changes to them (each box's measured size, once drawn) are applied
   // to it, as React Flow expects: a node handed back without its measured size is hidden, and its links dropped,
   // until React Flow measures it again.
+  // A box's text: its title, the notes of the links into it, its risk, and how many threads are staged in it.
+  const label = (n: Graph["nodes"][number], stagedHere: number) => {
+    // Each link's note is shown in the node it points to, not on the line.
+    const incoming = graph.edges.filter((e) => e.to === n.id);
+    return (
+      <div style={{ textAlign: "left" }}>
+        {stagedHere > 0 && (
+          <div
+            data-testid="staged-count"
+            title={`${stagedHere} thread${stagedHere === 1 ? "" : "s"} staged here`}
+            style={{ position: "absolute", top: -9, right: -9, minWidth: 18, height: 18, borderRadius: 9, background: "#d97706", color: "white", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", boxSizing: "border-box" }}
+          >
+            {stagedHere}
+          </div>
+        )}
+        <div style={{ fontSize: 13, lineHeight: 1.35 }}>{n.title}</div>
+        {incoming.map((e) => (
+          <div key={e.id} style={{ fontSize: 11, opacity: 0.55, marginTop: 4 }}>
+            ← {renderedNodes.get(e.from)?.node.title ?? e.from}
+            {e.note ? `: ${e.note}` : ""}
+          </div>
+        ))}
+        <RiskLine risk={riskiest(n.code)?.risk} />
+      </div>
+    );
+  };
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([...renderedNodes.values()].map((renderedNode) => {
     const n = renderedNode.node;
     const cell = cells.get(n.id)!;
-    // Each link's note is shown in the node it points to, not on the line.
-    const incoming = graph.edges.filter((e) => e.to === n.id);
     return {
       id: n.id,
       position: { x: cell.column * COLUMN_WIDTH, y: cell.row * ROW_HEIGHT },
-      data: {
-        label: (
-          <div style={{ textAlign: "left" }}>
-            <div style={{ fontSize: 13, lineHeight: 1.35 }}>{n.title}</div>
-            {incoming.map((e) => (
-              <div key={e.id} style={{ fontSize: 11, opacity: 0.55, marginTop: 4 }}>
-                ← {renderedNodes.get(e.from)?.node.title ?? e.from}
-                {e.note ? `: ${e.note}` : ""}
-              </div>
-            ))}
-          </div>
-        ),
-      },
+      data: { label: label(n, staged.get(n.id) ?? 0) },
       style: { width: NODE_WIDTH },
       // columns run left to right, so links leave from the right and arrive on the left
       sourcePosition: Position.Right,
@@ -97,8 +112,8 @@ export function Flow({ graph, locations, selected, onSelect, covered }: Props) {
       ...renderedNodes.get(id)!.background,
       ...(id === selected ? { borderColor: HIGHLIGHT, boxShadow: `0 0 0 1px ${HIGHLIGHT}` } : {}),
     });
-    setNodes((nodes) => nodes.map((n) => ({ ...n, style: style(n.id) })));
-  }, [active, selected, renderedNodes]);
+    setNodes((nodes) => nodes.map((n) => ({ ...n, style: style(n.id), data: { label: label(renderedNodes.get(n.id)!.node, staged.get(n.id) ?? 0) } })));
+  }, [active, selected, renderedNodes, [...staged].join()]);
 
   const edges: Edge[] = graph.edges.map((e) => {
     const back = isBack(e.from, e.to);

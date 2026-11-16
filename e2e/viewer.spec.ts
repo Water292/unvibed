@@ -208,7 +208,7 @@ test.describe("marking code reviewed", () => {
     const [yellow, green] = ["rgba(234, 179, 8, 0.25)", "rgba(34, 197, 94, 0.22)"];
     const nodeBackground = (id: string) => box(page, id).evaluate((el) => getComputedStyle(el).backgroundImage);
     // the location's box: the code and the line above it with its path and reviewed box
-    const locationBox = () => panel(page).locator(".code-view").locator("..");
+    const locationBox = () => panel(page).getByTestId("segment");
 
     await openBox(page, GREET_UUID, greetLineInPr);
     // greet's one location removes a line and adds one: its bar is half red, half green

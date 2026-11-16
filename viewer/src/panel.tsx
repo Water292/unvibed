@@ -3,7 +3,9 @@
 // location.
 import { useState, type PointerEvent } from "react";
 import type { Graph, Node } from "../../shared/graph.ts";
-import { CodeView } from "./code-view.tsx";
+import { Askable, Threads } from "./chat.tsx";
+import { groupLocations, LocationGroup } from "./code-view.tsx";
+import { riskiest, RiskLine, where } from "./risk.tsx";
 import type { RenderedLocation } from "./rendered-location.ts";
 import { ViewType } from "./view-type.ts";
 
@@ -90,16 +92,36 @@ export function Panel({ graph, node, locations, onMark, onSelect, width, onWidth
           </div>
         </div>
         <h2 style={{ fontSize: 16, margin: "4px 0 8px" }}>{node.title}</h2>
-        <p style={{ fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{node.text}</p>
+        <Askable anchor={`node:${node.id}`} context={`The explanation of graph node ${node.id} ("${node.title}"): ${node.text}`}>
+          <p style={{ fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{node.text}</p>
+        </Askable>
+        {(() => {
+          const top = riskiest(node.code);
+          return (
+            top && (
+              <RiskLine
+                risk={top.risk}
+                detailed
+                of={node.code.length > 1 ? `riskiest of ${node.code.length}, ${where(top.location)}:` : undefined}
+                ask={{
+                  anchor: `node:${node.id}`,
+                  context: `The AI reviewer's risk for graph node ${node.id} ("${node.title}"), which is its riskiest location's, ${where(top.location)}: ${top.risk.level} — ${top.risk.reason ?? ""}`,
+                }}
+              />
+            )
+          );
+        })()}
+        <Threads anchor={`node:${node.id}`} />
         {links(incoming, "←")}
         {links(outgoing, "→")}
-        {locations.map((location, i) => (
-          <CodeView
-            key={`${node.id}:${i}`}
-            location={location}
+        {groupLocations(locations).map((group) => (
+          <LocationGroup
+            key={`${node.id}:${group[0]!.index}`}
+            nodeId={node.id}
+            group={group}
             viewType={viewType}
-            onReviewed={(hash, r) => markAndReport(i, hash, r)}
-            failure={failure?.index === i ? failure.message : undefined}
+            onReviewed={markAndReport}
+            failure={failure}
           />
         ))}
       </aside>

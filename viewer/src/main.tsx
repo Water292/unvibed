@@ -2,6 +2,7 @@ import { StrictMode, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { MarkRequest } from "../../shared/graph-and-code.ts";
 import type { Graph } from "../../shared/graph.ts";
+import { ChatProvider, nodeOfThread, useChat } from "./chat.tsx";
 import { clampPanelWidth, initialPanelWidth, Panel } from "./panel.tsx";
 import { Flow } from "./react-flow/flow.tsx";
 import { renderLocations } from "./rendered-location.ts";
@@ -24,6 +25,20 @@ async function sendMark(request: MarkRequest): Promise<string | undefined> {
   const res = await fetch("/mark", { method: "POST", body: JSON.stringify(request) });
   return res.ok ? undefined : await res.text();
 }
+
+// A link ending #restore=<JSON of this page's localStorage> puts those settings back, then drops the hash: how a
+// saved demo state (scratch/demo-state.ts) brings back the browser's side. Opened on a page already showing, it reloads.
+function restoreSettings() {
+  if (!location.hash.startsWith("#restore=")) return false;
+  try {
+    for (const [k, v] of Object.entries(JSON.parse(decodeURIComponent(location.hash.slice("#restore=".length))) as Record<string, string>))
+      localStorage.setItem(k, v);
+  } catch {}
+  history.replaceState(null, "", location.pathname);
+  return true;
+}
+restoreSettings();
+addEventListener("hashchange", () => restoreSettings() && location.reload());
 
 // The diff view chosen last time, kept in this browser; unified if none, not a view, or storage is unavailable.
 const VIEW_TYPE_KEY = "unvibed.viewType";
@@ -113,11 +128,24 @@ function App() {
   // share dragged to, for both views; until then each view's default for the window the page opened in.
   const share = draggedShare ?? initialPanelWidth(viewType, openingWidth) / openingWidth;
   const width = clampPanelWidth(Math.round(share * windowWidth), windowWidth);
+  // where a chat anchor is, in a few words, for the staged bar: the node, and a location's file and lines
+  const describe = (anchor: string) => {
+    const [kind, rest = ""] = anchor.split(/:(.*)/s);
+    const [id, index] = kind === "loc" ? rest.split("#") : [rest, undefined];
+    const n = graph.nodes.find((n) => n.id === id);
+    const l = index === undefined ? undefined : n?.code[Number(index)];
+    const name = n?.title ?? id ?? anchor;
+    if (!l) return name;
+    const start = l.start_line ?? l.line;
+    return `${name} · ${l.path.split("/").pop()}:${start}${start !== l.line ? `-${l.line}` : ""}`;
+  };
   return (
+    <ChatProvider selectNode={setSelected} describe={describe}>
     <div style={{ position: "relative", height: "100%" }}>
-      <Flow graph={graph} locations={locations} selected={selected} onSelect={setSelected} covered={node ? width : 0} />
+      <StagedFlow graph={graph} locations={locations} selected={selected} onSelect={setSelected} covered={node ? width : 0} />
       {node && (
         <Panel
+          key={node.id}
           graph={graph}
           node={node}
           locations={locations.get(node.id)!}
@@ -130,7 +158,19 @@ function App() {
         />
       )}
     </div>
+    </ChatProvider>
   );
+}
+
+/** The canvas, with how many threads are staged in each node. */
+function StagedFlow(props: Omit<Parameters<typeof Flow>[0], "staged">) {
+  const { threads } = useChat();
+  const staged = new Map<string, number>();
+  for (const t of threads) {
+    const node = t.stagedAt !== null ? nodeOfThread(t, threads) : undefined;
+    if (node) staged.set(node, (staged.get(node) ?? 0) + 1);
+  }
+  return <Flow {...props} staged={staged} />;
 }
 
 createRoot(document.getElementById("root")!).render(

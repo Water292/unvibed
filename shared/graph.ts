@@ -17,6 +17,8 @@ export type Node = {
   code: Location[];
 };
 
+export type Risk = { level: "low" | "medium" | "high"; reason?: string };
+
 /** `to` helps explain `from`. */
 export type Edge = {
   /** A UUID, unique within the graph. */
@@ -50,4 +52,9 @@ export type Location = {
   removed: number;
   /** What these lines do, shown above them. */
   text: string;
+  /**
+   * How risky these lines are, as an AI reviewer judged them, with why. How that reviewer is asked is up to whoever
+   * runs it; unset when no reviewer has looked. A node's risk is its riskiest location's.
+   */
+  risk?: Risk;
 };
