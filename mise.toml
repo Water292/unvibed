@@ -33,3 +33,7 @@ run = "node src/cli.ts"
 [tasks.view]
 description = "Open the graph viewer on a graph file: mise run view <graph.json>"
 run = "node src/view.ts"
+
+[tasks."preview:publish"]
+description = "Commit the build in dist/ as branch preview/pr-<this branch's PR number>; --push pushes it: mise run preview:publish -- [--pr <n>] [--push]"
+run = "node scripts/publish-preview.ts"
