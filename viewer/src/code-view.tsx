@@ -80,16 +80,12 @@ export function blend(group: Indexed[], widen: (i: number) => Widen): Indexed[][
   return segments;
 }
 
-/**
- * A cut's diff cut again before each of starts (first lines, on side), each piece a diff of its own, so each location
- * after the first gets its header between pieces. A location owns the other side's lines listed just before its first
- * line, as ownRows has it.
- */
-export function splitDiff(diff: string, side: Location["side"], starts: number[]): string[] {
+/** A diff's lines before its @@ line, and its rows; undefined if it has no @@ line. */
+function rowsOf(diff: string) {
   const lines = diff.replace(/\n$/, "").split("\n");
   const at = lines.findIndex((l) => l.startsWith("@@"));
   const match = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(lines[at] ?? "");
-  if (!match) return [diff];
+  if (!match) return undefined;
   // git names a side with no lines by the line before the change, so its next line is one on
   const firstLine = (start: string, count: string | undefined) => (count === "0" ? Number(start) + 1 : Number(start));
   // each row with the old and new line numbers it's at; a line on one side only has -1 on the other
@@ -103,6 +99,23 @@ export function splitDiff(diff: string, side: Location["side"], starts: number[]
     if (onNew) newLine++;
     return row;
   });
+  return { head: lines.slice(0, at), rows };
+}
+
+/** Whether a diff shows a line on a side. */
+export function showsLine(diff: string, side: Location["side"], line: number): boolean {
+  return rowsOf(diff)?.rows.some((r) => (side === "LEFT" ? r.old : r.new) === line) ?? false;
+}
+
+/**
+ * A cut's diff cut again before each of starts (first lines, on side), each piece a diff of its own, so each location
+ * after the first gets its header between pieces. A location owns the other side's lines listed just before its first
+ * line, as ownRows has it.
+ */
+export function splitDiff(diff: string, side: Location["side"], starts: number[]): string[] {
+  const parsed = rowsOf(diff);
+  if (!parsed) return [diff];
+  const { head, rows } = parsed;
   const lineOf = (r: (typeof rows)[number]) => (side === "LEFT" ? r.old : r.new);
   const cuts = starts.map((start) => {
     let cut = rows.findIndex((r) => lineOf(r) >= start);
@@ -119,7 +132,7 @@ export function splitDiff(diff: string, side: Location["side"], starts: number[]
     // a side with no lines in the piece names the line before it, as git does
     const oldStart = olds ? piece[0]!.nextOld : piece[0]!.nextOld - 1;
     const newStart = news ? piece[0]!.nextNew : piece[0]!.nextNew - 1;
-    return [...lines.slice(0, at), `@@ -${oldStart},${olds} +${newStart},${news} @@`, ...piece.map((r) => r.text)].join("\n") + "\n";
+    return [...head, `@@ -${oldStart},${olds} +${newStart},${news} @@`, ...piece.map((r) => r.text)].join("\n") + "\n";
   });
 }
 
