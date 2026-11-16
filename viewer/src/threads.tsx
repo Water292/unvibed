@@ -157,16 +157,25 @@ function WithThreads({ threads, at, code, children, style }: WithThreadsProps) {
   const [bar, setBar] = useState<{ x: number; y: number; buttons: { label: string; run: () => void }[] }>();
   const items = threads.list.filter((item) => isHere(item, at, code));
 
-  // every item's quote, open or not, underlined in this text; browsers without the Highlight API show no marks
+  // every item's quote, open or not, underlined in this text, and again whenever the text changes: a box of code gets
+  // its lines after it's drawn. Browsers without the Highlight API show no marks.
   useEffect(() => {
     const el = textRef.current;
     if (!el || typeof CSS === "undefined" || !("highlights" in CSS)) return;
-    const ranges = items.map((item) => quoteRange(el, item)).filter((r) => r !== undefined);
     // one highlight for the page, shared by every box
     const marks = CSS.highlights.get("unvibed-quote") ?? new Highlight();
-    for (const r of ranges) marks.add(r);
     CSS.highlights.set("unvibed-quote", marks);
+    let ranges: Range[] = [];
+    const markQuotes = () => {
+      for (const r of ranges) marks.delete(r);
+      ranges = items.map((item) => quoteRange(el, item)).filter((r) => r !== undefined);
+      for (const r of ranges) marks.add(r);
+    };
+    markQuotes();
+    const changes = new MutationObserver(markQuotes);
+    changes.observe(el, { childList: true, subtree: true, characterData: true });
     return () => {
+      changes.disconnect();
       for (const r of ranges) marks.delete(r);
     };
   });
