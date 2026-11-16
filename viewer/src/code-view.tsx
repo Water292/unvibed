@@ -207,18 +207,6 @@ function Segment({ nodeId, segment, above, below, onMore, viewType, onReviewed, 
         </div>
         </Askable>
       )}
-      {segment.map(({ location: l, index }) => (
-        <RiskLine
-          key={index}
-          risk={l.risk}
-          detailed
-          of={segment.length > 1 ? `${placeOf(l)}:` : undefined}
-          ask={{
-            anchor: `loc:${nodeId}#${index}`,
-            context: `The AI reviewer's risk for ${placeOf(l)} (${sideName} side), in graph node ${nodeId}: ${l.risk?.level} — ${l.risk?.reason ?? ""}`,
-          }}
-        />
-      ))}
     </div>
     {segment.map((s) => (
       <Threads key={s.index} anchor={`loc:${nodeId}#${s.index}`} />
@@ -237,7 +225,7 @@ type HeaderProps = {
   failure: string | undefined;
 };
 
-/** A location's place, its reviewed box, and what its lines do. */
+/** A location's place, its reviewed box, what its lines do, and the AI reviewer's risk for them. */
 function LocationHeader({ nodeId, item: { rendered, location: l, index }, fetched, changedSinceGraph, onReviewed, failure }: HeaderProps) {
   const start = startOf(l);
   return (
@@ -262,6 +250,14 @@ function LocationHeader({ nodeId, item: { rendered, location: l, index }, fetche
           <div className="location-text">{l.text}</div>
         </Askable>
       )}
+      <RiskLine
+        risk={l.risk}
+        detailed
+        ask={{
+          anchor: `loc:${nodeId}#${index}`,
+          context: `The AI reviewer's risk for ${placeOf(l)} (${l.side === "LEFT" ? "base" : "head"} side), in graph node ${nodeId}: ${l.risk?.level} — ${l.risk?.reason ?? ""}`,
+        }}
+      />
     </div>
   );
 }
