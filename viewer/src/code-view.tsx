@@ -88,11 +88,13 @@ export function blend(group: Indexed[], widen: (i: number) => Widen): Indexed[][
 export function splitDiff(diff: string, side: Location["side"], starts: number[]): string[] {
   const lines = diff.replace(/\n$/, "").split("\n");
   const at = lines.findIndex((l) => l.startsWith("@@"));
-  const match = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(lines[at] ?? "");
+  const match = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(lines[at] ?? "");
   if (!match) return [diff];
+  // git names a side with no lines by the line before the change, so its next line is one on
+  const firstLine = (start: string, count: string | undefined) => (count === "0" ? Number(start) + 1 : Number(start));
   // each row with the old and new line numbers it's at; a line on one side only has -1 on the other
-  let oldLine = Number(match[1]);
-  let newLine = Number(match[2]);
+  let oldLine = firstLine(match[1]!, match[2]);
+  let newLine = firstLine(match[3]!, match[4]);
   const rows = lines.slice(at + 1).map((text) => {
     const onOld = text[0] === " " || text[0] === "-";
     const onNew = text[0] === " " || text[0] === "+";
