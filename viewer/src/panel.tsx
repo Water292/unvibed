@@ -3,8 +3,8 @@
 // location.
 import { useState, type PointerEvent } from "react";
 import type { Graph, Node } from "../../shared/graph.ts";
-import { Askable, Threads } from "./chat.tsx";
 import { groupLocations, LocationGroup } from "./code-view.tsx";
+import { useHost } from "./host.tsx";
 import { riskiest, RiskLine, where } from "./risk.tsx";
 import type { RenderedLocation } from "./rendered-location.ts";
 import { ViewType } from "./view-type.ts";
@@ -32,6 +32,7 @@ type Props = {
 };
 
 export function Panel({ graph, node, locations, onMark, onSelect, width, onWidth, viewType, onViewType }: Props) {
+  const { Askable, Threads } = useHost();
   // The last mark that couldn't be saved: which location, and why.
   const [failure, setFailure] = useState<{ index: number; message: string }>();
   const markAndReport = async (index: number, hash: string, reviewed: boolean) => {

@@ -4,7 +4,7 @@
 // node's explanation, with the reviewer's reason, which can be asked about.
 import type { ReactNode } from "react";
 import type { Location, Risk } from "../../shared/graph.ts";
-import { Askable } from "./chat.tsx";
+import { useHost } from "./host.tsx";
 
 const COLOR: Record<Risk["level"], string> = { low: "#16a34a", medium: "#d97706", high: "#dc2626" };
 const LABEL: Record<Risk["level"], string> = { low: "Low risk", medium: "Medium risk", high: "High risk" };
@@ -31,6 +31,7 @@ type Props = {
 
 /** The line at the bottom of a box; nothing if no reviewer rated it. */
 export function RiskLine({ risk, detailed, of, ask }: Props) {
+  const { Askable } = useHost();
   if (!risk) return null;
   const color = COLOR[risk.level];
   const line = (

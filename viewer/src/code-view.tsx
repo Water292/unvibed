@@ -7,10 +7,10 @@
 import { DiffModeEnum, DiffView } from "@git-diff-view/react";
 import "@git-diff-view/react/styles/diff-view-pure.css";
 import { useEffect, useState } from "react";
-import { Askable, Threads } from "./chat.tsx";
 import "./code-view.css";
 import type { CodeCut } from "../../shared/graph-and-code.ts";
 import type { Location } from "../../shared/graph.ts";
+import { useHost } from "./host.tsx";
 import { ReviewState, tint, type RenderedLocation } from "./rendered-location.ts";
 import { RiskLine, where as placeOf } from "./risk.tsx";
 import { ViewType } from "./view-type.ts";
@@ -35,10 +35,10 @@ export function useDarkMode() {
   return dark;
 }
 
-/** Lines start..end of a file on a side, with above / below more lines, from the server. */
-async function fetchCut(path: string, side: Location["side"], start: number, end: number, above: number, below: number): Promise<CodeCut> {
+/** Lines start..end of a file on a side, with above / below more lines, from the server's routes. */
+async function fetchCut(routes: string, path: string, side: Location["side"], start: number, end: number, above: number, below: number): Promise<CodeCut> {
   const q = new URLSearchParams({ path, side, start: String(start), end: String(end), above: String(above), below: String(below) });
-  const res = await fetch(`/code?${q}`);
+  const res = await fetch(`${routes}/code?${q}`);
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -172,6 +172,7 @@ type SegmentProps = Omit<Props, "group"> & {
 /** One box: one location's lines, or several that ran together, fetched as one cut. */
 function Segment({ nodeId, segment, above, below, onMore, viewType, onReviewed, failure }: SegmentProps) {
   const dark = useDarkMode();
+  const { routes, Askable, Threads } = useHost();
   const first = segment[0]!.location;
   const { path, side } = first;
   const start = startOf(first);
@@ -184,8 +185,8 @@ function Segment({ nodeId, segment, above, below, onMore, viewType, onReviewed, 
   useEffect(() => {
     let current = true; // a newer request replaces this one's answer
     Promise.all([
-      fetchCut(path, side, start, end, above, below),
-      ...segment.map((s) => fetchCut(path, side, startOf(s.location), s.location.line, 0, 0)),
+      fetchCut(routes, path, side, start, end, above, below),
+      ...segment.map((s) => fetchCut(routes, path, side, startOf(s.location), s.location.line, 0, 0)),
     ]).then(
       ([c, ...owns]) => current && (setCut(c), setOwn(new Map(segment.map((s, i) => [s.index, owns[i]!]))), setError(undefined)),
       (e: Error) => current && setError(e.message),
@@ -193,7 +194,7 @@ function Segment({ nodeId, segment, above, below, onMore, viewType, onReviewed, 
     return () => {
       current = false;
     };
-  }, [path, side, start, end, above, below, ids]);
+  }, [routes, path, side, start, end, above, below, ids]);
   // Code that changed since the graph was made doesn't have the graph's hash: the graph doesn't explain it, so the box
   // doesn't show it, and it can't be ticked.
   const changedSinceGraph = (s: Indexed) => own.has(s.index) && own.get(s.index)!.hash !== s.location.hash;
@@ -270,6 +271,7 @@ type HeaderProps = {
 
 /** A location's place, its reviewed box, what its lines do, and the AI reviewer's risk for them. */
 function LocationHeader({ nodeId, item: { rendered, location: l, index }, fetched, changedSinceGraph, onReviewed, failure }: HeaderProps) {
+  const { Askable } = useHost();
   const start = startOf(l);
   return (
     <div data-testid="location" style={{ marginBottom: 4 }}>
