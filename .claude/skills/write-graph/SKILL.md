@@ -5,7 +5,7 @@ description: Write or update an unvibed understanding graph (a graph.json of nod
 
 # Writing a graph
 
-A graph explains a change so a reviewer can follow it from the graph alone. Its format is `shared/graph.ts`: read its comments first, they say what every field holds.
+A graph explains a change so a reviewer can follow it from the graph alone. `<unvibed>` below is a checkout of unvibed (`.` inside the unvibed repo). The graph's format is `<unvibed>/shared/graph.ts`: read its comments first, they say what every field holds.
 
 The change is `git diff <base> <head>`. Unless told otherwise, base is `git merge-base origin/main HEAD` and head is the working tree.
 
@@ -24,16 +24,16 @@ The change is `git diff <base> <head>`. Unless told otherwise, base is `git merg
 ## Mechanics
 
 - Every node, edge and location `id` is a fresh lowercase UUID (`node -e 'console.log(crypto.randomUUID())'`).
-- `schema` is `git hash-object shared/graph.ts`.
-- Write each location with `"hash": ""`, `"added": 0`, `"removed": 0`, then run
+- `schema` is `git hash-object <unvibed>/shared/graph.ts`.
+- Write each location with `"hash": ""`, `"added": 0`, `"removed": 0`, then run graph check from the repo the graph is for:
 
   ```sh
-  mise run graph check <graph.json> --base <base> --head <head>
+  node <unvibed>/src/cli.ts check <graph.json> --base <base> --head <head>
   ```
 
   For each location it reports, copy the printed `should be: hash …, added …, removed …` into the graph, and run it again until it prints `ok`.
-- Open it for review with
+- Open it for review, from the repo the graph is for, with
 
   ```sh
-  mise run view <graph.json> --base <base> --head <head>
+  node <unvibed>/src/view.ts <graph.json> --base <base> --head <head>
   ```
