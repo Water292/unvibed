@@ -250,12 +250,10 @@ function Segment({ nodeId, segment, above, below, onMore, viewType, onReviewed, 
               </div>
             </Askable>
           )}
+          <Threads anchor={`loc:${nodeId}#${item.index}`} />
         </div>
       ))}
     </div>
-    {segment.map((s) => (
-      <Threads key={s.index} anchor={`loc:${nodeId}#${s.index}`} />
-    ))}
     </>
   );
 }
