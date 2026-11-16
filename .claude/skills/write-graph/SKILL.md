@@ -11,7 +11,7 @@ The change is `git diff <base> <head>`. Unless told otherwise, base is `git merg
 
 ## Rules
 
-- **Show every changed line.** Every line the change adds or removes is shown by at least one location; a line may appear in more than one. Large generated files, such as a lockfile, may be left out. graph check doesn't check this, so compare the graph against `git diff <base> <head>` before calling it done.
+- **Show every changed line.** Every line the change adds or removes is shown by at least one location; a line may appear in more than one. Large generated files, such as a lockfile, may be left out. graph check lists every changed line no location shows; go through that list before calling the graph done.
 - **Edges start from the node holding the referencing line.** An edge's `from` node must have a location containing the line that makes the edge true (the call, the import, the use), and it points the way things happen: caller → callee, never "called by". If no node holds that line, give the line a node of its own rather than hanging the edge off a parent.
 - **Explain every name the change introduces.** A reader learns every new variable, field, function, state and back-and-forth with a library from the graph, without asking. A name that carries meaning gets its own node saying what it holds and where it comes from; nodes link along the data flow. A cryptic name is renamed in the code, not explained around.
 - **Removed lines only when nothing replaces them.** A RIGHT location already shows the lines it replaced, so a LEFT location is only for a pure deletion.

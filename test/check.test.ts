@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { expect, test } from "vitest";
-import { check, checkEdgeEnds, checkIds, type ReadFile } from "../src/check.ts";
+import { check, checkEdgeEnds, checkGraph, checkIds, type ReadFile } from "../src/check.ts";
 import { hashLines, hashRows } from "../src/hunks.ts";
 import type { Graph } from "../shared/graph.ts";
 
@@ -105,4 +105,16 @@ test("every edge joins two of the graph's nodes", () => {
     { id: leftOver.edges[1]!.id, end: "from", nodeId: alsoGone },
     { id: leftOver.edges[1]!.id, end: "to", nodeId: gone },
   ]);
+});
+
+test("lists the changed lines no location shows, as runs of removed and added lines", () => {
+  // the graph shows lines 2-3; the head also changes line 4 and adds a line 6, and changes a file no location names
+  const head = "one\ntwo\nthree\nFOUR\nfive\nsix\n";
+  const read: ReadFile = (side, path) => (path === "example.ts" ? (side === "LEFT" ? `${BASE}five\n` : head) : side === "LEFT" ? "a\n" : "b\n");
+  expect(checkGraph(REPO, graph, read, ["example.ts", "other.ts"]).notShown).toEqual([
+    { path: "example.ts", removed: { start: 4, end: 4 }, added: { start: 4, end: 4 } },
+    { path: "example.ts", added: { start: 6, end: 6 } },
+    { path: "other.ts", removed: { start: 1, end: 1 }, added: { start: 1, end: 1 } },
+  ]);
+  expect(checkGraph(REPO, graph, sides(BASE, HEAD), ["example.ts"]).notShown).toEqual([]);
 });
