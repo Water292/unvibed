@@ -28,15 +28,16 @@ function main(argv: string[]): number {
     console.error(usage);
     return 2;
   }
-  const base = args.values.base ?? defaultBase();
+  const repo = process.cwd();
+  const base = args.values.base ?? defaultBase(repo);
   const head = args.values.head;
   const read: ReadFile = (side, path) => {
     const rev = side === "LEFT" ? base : head;
-    return show(rev, path);
+    return show(repo, rev, path);
   };
   const graph = JSON.parse(readFileSync(file, "utf8")) as Graph;
 
-  const problems = check(graph, read);
+  const problems = check(repo, graph, read);
   for (const p of problems) {
     console.log(`✗ ${p.node}: ${p.path}:${p.start_line}-${p.line} (${p.side}) ${p.reason}`);
     for (const l of p.actual ?? []) console.log(`    | ${l}`);

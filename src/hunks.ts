@@ -41,13 +41,13 @@ const toDiffLine = (c: Change) => (c.type === "insert" ? "+" : c.type === "delet
 
 /**
  * Every line between two texts of a file (undefined = the file isn't there), as changes; unchanged lines carry their
- * number in both. git diffs the texts themselves, stored as blobs, so the diff is of exactly what was read.
+ * number in both. git diffs the texts themselves, stored as blobs in repo, so the diff is of exactly what was read.
  */
-export function getChanges(before: string | undefined, after: string | undefined): Change[] {
+export function getChanges(repo: string, before: string | undefined, after: string | undefined): Change[] {
   if (before === after)
     return splitLines(before ?? "").map((content, i): Change => ({ type: "normal", isNormal: true, oldLineNumber: i + 1, newLineNumber: i + 1, content }));
-  const blob = (text: string | undefined) => gitWithInput(text ?? "", "hash-object", "-w", "--stdin").trim();
-  const diff = git("diff", "--unified=100000", blob(before), blob(after));
+  const blob = (text: string | undefined) => gitWithInput(repo, text ?? "", "hash-object", "-w", "--stdin").trim();
+  const diff = git(repo, "diff", "--unified=100000", blob(before), blob(after));
   return gitdiff.parse(diff)[0]?.hunks.flatMap((h) => h.changes) ?? [];
 }
 
@@ -119,15 +119,15 @@ export function ownRows(changes: Change[], side: Location["side"], start: number
 export const EMPTY_CUT: CodeCut = { diff: "", moreAbove: false, moreBelow: false, hash: "" };
 
 /**
- * Lines start..end of path on side, widened by above / below lines, read now: from git at a commit, from disk for
- * the working tree. The caller checks that path is a file in the repo
+ * Lines start..end of path in repo on side, widened by above / below lines, read now: from git at a commit, from disk
+ * for the working tree. The caller checks that path is a file in the repo
  * (isRepoFile).
  */
-export function cutFor(path: string, side: Location["side"], start: number, end: number, above: number, below: number, base: string, head: string | undefined): CodeCut {
-  const before = show(base, path);
-  const after = show(head, path);
+export function cutFor(repo: string, path: string, side: Location["side"], start: number, end: number, above: number, below: number, base: string, head: string | undefined): CodeCut {
+  const before = show(repo, base, path);
+  const after = show(repo, head, path);
   if ((side === "LEFT" ? before : after) === undefined) return EMPTY_CUT;
-  const changes = getChanges(before, after);
+  const changes = getChanges(repo, before, after);
   const own = ownRows(changes, side, start, end);
   const cut = hunkIn(changes, side, start, end, above, below);
   const hash = own.length ? hashRows(own) : "";

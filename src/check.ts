@@ -21,15 +21,15 @@ type Read =
   | { ok: true; rows: string[] }
   | { ok: false; reason: "missing-file" | "out-of-range"; rows?: string[] };
 
-/** Reads locations' own rows, diffing each file once. */
-function rowsReader(read: ReadFile) {
+/** Reads locations' own rows, diffing each file once in repo. */
+function rowsReader(repo: string, read: ReadFile) {
   const changes = new Map<string, ReturnType<typeof getChanges>>();
   return (loc: Location): Read => {
     const text = read(loc.side, loc.path);
     if (text === undefined) return { ok: false, reason: "missing-file" };
     const start = loc.start_line ?? loc.line;
     if (start < 1 || loc.line < start || loc.line > splitLines(text).length) return { ok: false, reason: "out-of-range" };
-    if (!changes.has(loc.path)) changes.set(loc.path, getChanges(read("LEFT", loc.path), read("RIGHT", loc.path)));
+    if (!changes.has(loc.path)) changes.set(loc.path, getChanges(repo, read("LEFT", loc.path), read("RIGHT", loc.path)));
     return { ok: true, rows: ownRows(changes.get(loc.path)!, loc.side, start, loc.line) };
   };
 }
@@ -43,8 +43,8 @@ export const diffOf = (rows: string[]): Diff => ({
 });
 
 /** Every location whose diff no longer matches what's stored for it. Empty means the graph describes the change it claims to. */
-export function check(graph: Graph, read: ReadFile): Problem[] {
-  const rowsOf = rowsReader(read);
+export function check(repo: string, graph: Graph, read: ReadFile): Problem[] {
+  const rowsOf = rowsReader(repo, read);
   const problems: Problem[] = [];
   for (const node of graph.nodes) {
     for (const loc of node.code) {

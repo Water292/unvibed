@@ -19,6 +19,8 @@ const graph: Graph = {
   edges: [],
 };
 
+// check stores the texts it diffs as blobs in a repo: this one, where the tests run
+const REPO = process.cwd();
 const sides = (base: string, head: string): ReadFile => (side) => (side === "LEFT" ? base : head);
 const BASE = "one\nzwei\nthree\nfour\n";
 const HEAD = "one\ntwo\nthree\nfour\n";
@@ -36,40 +38,40 @@ test("a location's hash ignores whitespace in its rows, but not which rows were 
 });
 
 test("re-indented code still passes", () => {
-  expect(check(graph, sides(BASE, "one\n    two\nthree\nfour\n"))).toEqual([]);
+  expect(check(REPO, graph, sides(BASE, "one\n    two\nthree\nfour\n"))).toEqual([]);
 });
 
 test("untouched code passes", () => {
-  expect(check(graph, sides(BASE, HEAD))).toEqual([]);
+  expect(check(REPO, graph, sides(BASE, HEAD))).toEqual([]);
 });
 
 test("editing a line the node explains fails, showing the rows now", () => {
-  expect(check(graph, sides(BASE, "one\nTWO\nthree\nfour\n"))).toMatchObject([
+  expect(check(REPO, graph, sides(BASE, "one\nTWO\nthree\nfour\n"))).toMatchObject([
     { reason: "hash-mismatch", actual: ["-zwei", "+TWO", " three"], expected: { hash: hashRows(["-zwei", "+TWO", " three"]), added: 1, removed: 1 } },
   ]);
 });
 
 test("code shifting under the node fails", () => {
-  expect(check(graph, sides(BASE, `zero\n${HEAD}`))).toMatchObject([{ reason: "hash-mismatch" }]);
+  expect(check(REPO, graph, sides(BASE, `zero\n${HEAD}`))).toMatchObject([{ reason: "hash-mismatch" }]);
 });
 
 test("the same head lines replacing something else fail: a base change changes the change", () => {
-  expect(check(graph, sides("one\ndeux\nthree\nfour\n", HEAD))).toMatchObject([{ reason: "hash-mismatch", actual: ["-deux", "+two", " three"] }]);
+  expect(check(REPO, graph, sides("one\ndeux\nthree\nfour\n", HEAD))).toMatchObject([{ reason: "hash-mismatch", actual: ["-deux", "+two", " three"] }]);
 });
 
 test("editing code the node doesn't explain passes", () => {
-  expect(check(graph, sides(BASE, "one\ntwo\nthree\nFOUR\nfive\n"))).toEqual([]);
+  expect(check(REPO, graph, sides(BASE, "one\ntwo\nthree\nFOUR\nfive\n"))).toEqual([]);
 });
 
 test("counts that don't match the rows fail, even with the right hash", () => {
   const location = { ...graph.nodes[0]!.code[0]!, added: 5 };
   const wrong = { ...graph, nodes: [{ ...graph.nodes[0]!, code: [location] }] };
-  expect(check(wrong, sides(BASE, HEAD))).toMatchObject([{ reason: "count-mismatch" }]);
+  expect(check(REPO, wrong, sides(BASE, HEAD))).toMatchObject([{ reason: "count-mismatch" }]);
 });
 
 test("a location past the end of its file, or in a file that isn't there, fails", () => {
-  expect(check(graph, sides(BASE, "one\n"))).toMatchObject([{ reason: "out-of-range" }]);
-  expect(check(graph, () => undefined)).toMatchObject([{ reason: "missing-file" }]);
+  expect(check(REPO, graph, sides(BASE, "one\n"))).toMatchObject([{ reason: "out-of-range" }]);
+  expect(check(REPO, graph, () => undefined)).toMatchObject([{ reason: "missing-file" }]);
 });
 
 test("every node, edge and location has a UUID of its own", () => {

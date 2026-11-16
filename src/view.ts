@@ -24,7 +24,7 @@ import { createServer, type Plugin } from "vite";
 import { defaultBase, git, isRepoFile } from "./git.ts";
 import type { Graph } from "../shared/graph.ts";
 import { cutFor, EMPTY_CUT } from "./hunks.ts";
-import { createTables, currentBranch, isBranch, mark, reviewedHashes } from "./review.ts";
+import { currentBranch, isBranch, ReviewStore } from "./review.ts";
 import { z } from "zod";
 import { CodeQuery, MarkRequest } from "../shared/graph-and-code.ts";
 import { chat, createChatTables, deleteThread, markSent, stage, stagedText, startThread, summarize, threads, type ChatRequest, type StartRequest } from "./chat.ts";
@@ -43,26 +43,28 @@ if (!file) {
   process.exit(2);
 }
 const path = resolve(file);
-const base = args.values.base ?? defaultBase();
+// the repo the viewer runs in, which it reads the code of and keeps its marks in
+const repo = process.cwd();
+const base = args.values.base ?? defaultBase(repo);
 const head = args.values.head;
 const port = args.values.port === undefined ? undefined : Number(args.values.port);
 if (port !== undefined && !Number.isInteger(port)) {
   console.error(`--port must be a number\n${usage}`);
   process.exit(2);
 }
-if (head !== undefined && args.values.review === undefined && !isBranch(head)) {
+if (head !== undefined && args.values.review === undefined && !isBranch(repo, head)) {
   console.error(`${head} isn't a branch: name the review with --review <name>\n${usage}`);
   process.exit(2);
 }
-const startingBranch = currentBranch();
+const startingBranch = currentBranch(repo);
 const review = args.values.review ?? head ?? startingBranch;
 if (review === undefined) {
   console.error(`no branch is checked out: name the review with --review <name>\n${usage}`);
   process.exit(2);
 }
-createTables();
-createChatTables();
-const chatSetup = { base, head, graphPath: path, repo: git("rev-parse", "--show-toplevel").trim(), chatFrom: args.values["chat-from"] };
+const reviews = new ReviewStore(repo);
+createChatTables(repo);
+const chatSetup = { base, head, graphPath: path, repo: git(repo, "rev-parse", "--show-toplevel").trim(), chatFrom: args.values["chat-from"] };
 
 /** A POST body as JSON; undefined if it isn't JSON. */
 async function jsonBody(req: import("node:http").IncomingMessage): Promise<any> {
@@ -75,7 +77,7 @@ async function jsonBody(req: import("node:http").IncomingMessage): Promise<any> 
 /** Why requests are refused: the working tree is shown and another branch is checked out than at startup. */
 function describeBranchChange(): string | undefined {
   if (head !== undefined) return undefined;
-  const branch = currentBranch();
+  const branch = currentBranch(repo);
   if (branch === startingBranch) return undefined;
   return `${startingBranch ?? "a detached HEAD"} was checked out when the viewer started, ${branch ?? "a detached HEAD"} is now: check it out again or restart the viewer`;
 }
@@ -160,7 +162,7 @@ const serveGraph: Plugin = {
     // them along with /graph.json, which is refused on another branch.
     server.middlewares.use("/reviewed", (_req, res) => {
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify(reviewedHashes(review)));
+      res.end(JSON.stringify(reviews.reviewedHashes(review)));
     });
     server.middlewares.use("/code", (req, res) => {
       const branchChange = describeBranchChange();
@@ -178,8 +180,8 @@ const serveGraph: Plugin = {
       const { path: file, side, start, end, above, below } = query.data;
       try {
         // only a file in the repo on that side is read; for anything else, an empty cut, as for a file that can't be read
-        const cut = isRepoFile(side === "LEFT" ? base : head, file)
-          ? cutFor(file, side, start, end, above, below, base, head)
+        const cut = isRepoFile(repo, side === "LEFT" ? base : head, file)
+          ? cutFor(repo, file, side, start, end, above, below, base, head)
           : EMPTY_CUT;
         res.setHeader("content-type", "application/json");
         res.end(JSON.stringify(cut));
@@ -213,7 +215,7 @@ const serveGraph: Plugin = {
         return;
       }
       try {
-        mark(review, request.data.hash, request.data.reviewed);
+        reviews.mark(review, request.data.hash, request.data.reviewed);
         res.end("ok");
       } catch (e) {
         res.statusCode = 500;

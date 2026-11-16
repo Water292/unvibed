@@ -1,7 +1,7 @@
 // The viewer as a user meets it: `node src/view.ts graph.json` on a real repo, in a real browser.
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
-import { clearReview, createTables } from "../src/review.ts";
+import { ReviewStore } from "../src/review.ts";
 import type { Graph } from "../shared/graph.ts";
 import { tempRepo } from "../test/temp-repo.ts";
 import { hashRows } from "../src/hunks.ts";
@@ -29,6 +29,8 @@ const graph: Graph = {
 // A repo with the base committed and the PR's change left uncommitted, its graph, and the viewer serving them.
 let repo: ReturnType<typeof tempRepo>;
 let viewer: Awaited<ReturnType<typeof startViewer>>;
+// this repo's marks database, which the viewer shares
+let reviews: ReviewStore;
 test.beforeAll(async ({}, { parallelIndex }) => {
   repo = tempRepo();
   repo.write("app.ts", BASE);
@@ -36,8 +38,7 @@ test.beforeAll(async ({}, { parallelIndex }) => {
   repo.git("commit", "-qm", "base");
   repo.write("app.ts", HEAD);
   repo.write("graph.json", JSON.stringify(graph));
-  process.chdir(repo.dir); // so createTables opens this repo's database, which the viewer shares
-  createTables();
+  reviews = new ReviewStore(repo.dir);
   // Each Playwright worker running at the same time has its own parallelIndex, so its own port.
   viewer = await startViewer(repo.dir, 4700 + parallelIndex, ["--base", "HEAD"]);
 });
@@ -176,7 +177,7 @@ test.describe("marking code reviewed", () => {
   // Put everything back for the tests that follow.
   test.afterEach(() => {
     repo.write("app.ts", HEAD);
-    clearReview("e2e");
+    reviews.clearReview("e2e");
   });
 
   const getReviewedCheckbox = (page: Page) => panel(page).getByRole("checkbox", { name: "reviewed" });

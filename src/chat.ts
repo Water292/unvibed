@@ -16,8 +16,8 @@ import { git } from "./git.ts";
 
 let db: DatabaseSync;
 
-export function createChatTables(): void {
-  const dir = git("rev-parse", "--path-format=absolute", "--git-common-dir").trim();
+export function createChatTables(repo: string): void {
+  const dir = git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir").trim();
   db = new DatabaseSync(join(dir, "unvibed.sqlite"), { timeout: 5000 });
   db.exec(`
     CREATE TABLE IF NOT EXISTS vibe_threads_v1 (

@@ -7,7 +7,7 @@ import { check } from "../src/check.ts";
 import { cutFor } from "../src/hunks.ts";
 import { gitWithInput, show } from "../src/git.ts";
 import { MarkRequest } from "../shared/graph-and-code.ts";
-import { createTables, currentBranch, mark, reviewedHashes } from "../src/review.ts";
+import { currentBranch, ReviewStore } from "../src/review.ts";
 import type { Location } from "../shared/graph.ts";
 import { tempRepo } from "./temp-repo.ts";
 
@@ -15,16 +15,13 @@ import { tempRepo } from "./temp-repo.ts";
 
 let repo: ReturnType<typeof tempRepo>;
 let base: string;
-let cwd: string;
+let reviews: ReviewStore;
 const REVIEW = "pr"; // the review these tests mark in
 const writeLines = (path: string, lines: string[]) => repo.write(path, lines.join("\n") + "\n");
 
-// One repo for every test in this file. The tests run from inside it, because the code they test runs git in the
-// current directory.
+// One repo for every test in this file.
 beforeAll(() => {
-  cwd = process.cwd();
   repo = tempRepo();
-  process.chdir(repo.dir);
   writeLines("f.ts", ["a", "b", "c"]);
   repo.git("add", ".");
   repo.git("commit", "-q", "-m", "base");
@@ -32,7 +29,6 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  process.chdir(cwd);
   rmSync(repo.dir, { recursive: true, force: true });
 });
 
@@ -41,7 +37,7 @@ beforeEach(() => {
   writeLines("f.ts", ["a", "b", "c", "d", "e"]); // the PR adds d and e
   repo.git("clean", "-fdq");
   rmSync(join(repo.dir, ".git/unvibed.sqlite"), { force: true });
-  createTables();
+  reviews = new ReviewStore(repo.dir);
 });
 
 const createLocation = (firstLine: number, lastLine: number, path = "f.ts", side: Location["side"] = "RIGHT"): Location => ({
@@ -58,14 +54,14 @@ const createLocation = (firstLine: number, lastLine: number, path = "f.ts", side
 
 /** What the page gets for a location, against a base: its code and its hash. */
 function getLocationView(loc: Location, from = base) {
-  return cutFor(loc.path, loc.side, loc.start_line ?? loc.line, loc.line, 0, 0, from, undefined);
+  return cutFor(repo.dir, loc.path, loc.side, loc.start_line ?? loc.line, loc.line, 0, 0, from, undefined);
 }
 
 /** Whether a location, read against a base, is marked reviewed: its hash is one of the review's. */
-const isLocationReviewed = (loc: Location, from = base) => reviewedHashes(REVIEW).includes(getLocationView(loc, from).hash);
+const isLocationReviewed = (loc: Location, from = base) => reviews.reviewedHashes(REVIEW).includes(getLocationView(loc, from).hash);
 
 /** Ticks a location as the page does, by its hash. */
-const tick = (loc: Location, reviewed = true) => mark(REVIEW, getLocationView(loc).hash, reviewed);
+const tick = (loc: Location, reviewed = true) => reviews.mark(REVIEW, getLocationView(loc).hash, reviewed);
 
 test("marking a location makes it reviewed", () => {
   expect(isLocationReviewed(createLocation(4, 5))).toBe(false);
@@ -88,8 +84,8 @@ test("code that changed loses its mark", () => {
 test("code whose base changed loses its mark, though its own lines didn't change", () => {
   tick(createLocation(3, 5)); // c stays as it was in the base, d and e are added
   // a commit for the base with c changed, as after a rebase onto a main that changed it
-  const blob = gitWithInput("a\nb\nX\n", "hash-object", "-w", "--stdin").trim();
-  const tree = gitWithInput(`100644 blob ${blob}\tf.ts\n`, "mktree").trim();
+  const blob = gitWithInput(repo.dir, "a\nb\nX\n", "hash-object", "-w", "--stdin").trim();
+  const tree = gitWithInput(repo.dir, `100644 blob ${blob}\tf.ts\n`, "mktree").trim();
   const rebasedBase = repo.git("commit-tree", tree, "-m", "base with c changed");
   expect(isLocationReviewed(createLocation(3, 5), rebasedBase)).toBe(false);
 });
@@ -109,7 +105,7 @@ test("unmarking a location makes it unreviewed again", () => {
 test("a tick on code that changed after it was shown marks only what was shown", () => {
   const shown = getLocationView(createLocation(4, 5)).hash;
   writeLines("f.ts", ["a", "b", "c", "d", "EDITED"]); // saved after the page showed the code
-  mark(REVIEW, shown, true);
+  reviews.mark(REVIEW, shown, true);
   expect(isLocationReviewed(createLocation(4, 5))).toBe(false);
   writeLines("f.ts", ["a", "b", "c", "d", "e"]); // back to what was shown
   expect(isLocationReviewed(createLocation(4, 5))).toBe(true);
@@ -127,7 +123,7 @@ test("base-side code (deleted lines) and files git doesn't track yet can be mark
 test("widening a location with ↑ / ↓ keeps its hash, so its mark holds", () => {
   writeLines("f.ts", ["A", "b", "c", "d", "e"]); // the PR also changes line 1, which widening reaches
   const { hash } = getLocationView(createLocation(4, 5));
-  const widened = cutFor("f.ts", "RIGHT", 4, 5, 20, 20, base, undefined);
+  const widened = cutFor(repo.dir, "f.ts", "RIGHT", 4, 5, 20, 20, base, undefined);
   expect(widened.diff).toContain("+A"); // the other change is in the widened code
   expect(widened.hash).toBe(hash);
 });
@@ -145,32 +141,32 @@ test("a graph's hash is the hash marks are made by", () => {
   };
   const code = [stored(2, 3, 1, 1), stored(4, 5, 2, 0), stored(1, 1, 0, 0)];
   const graph = { schema: "test", nodes: [{ id: randomUUID(), title: "", text: "", code }], edges: [] };
-  expect(check(graph, (side, path) => show(side === "LEFT" ? base : undefined, path))).toEqual([]);
+  expect(check(repo.dir, graph, (side, path) => show(repo.dir, side === "LEFT" ? base : undefined, path))).toEqual([]);
 });
 
 test("a review lists the hashes marked in it, and no others", () => {
-  mark(REVIEW, "a", true);
-  mark(REVIEW, "b", true);
-  mark(REVIEW, "b", false);
-  mark("other", "c", true);
-  expect(reviewedHashes(REVIEW)).toEqual(["a"]);
+  reviews.mark(REVIEW, "a", true);
+  reviews.mark(REVIEW, "b", true);
+  reviews.mark(REVIEW, "b", false);
+  reviews.mark("other", "c", true);
+  expect(reviews.reviewedHashes(REVIEW)).toEqual(["a"]);
 });
 
 test("a review is named after the current branch", () => {
-  expect(currentBranch()).toBe(repo.git("rev-parse", "--abbrev-ref", "HEAD"));
+  expect(currentBranch(repo.dir)).toBe(repo.git("rev-parse", "--abbrev-ref", "HEAD"));
 });
 
 test("with no branch checked out, the viewer asks for a review name instead of starting", () => {
-  const branch = currentBranch()!;
+  const branch = currentBranch(repo.dir)!;
   repo.git("checkout", "-q", "--detach");
-  const view = spawnSync(process.execPath, [join(cwd, "src/view.ts"), "graph.json", "--base", "HEAD"], { encoding: "utf8" });
+  const view = spawnSync(process.execPath, [join(process.cwd(), "src/view.ts"), "graph.json", "--base", "HEAD"], { cwd: repo.dir, encoding: "utf8" });
   repo.git("checkout", "-q", branch);
   expect(view.status).toBe(2);
   expect(view.stderr).toContain("name the review with --review <name>");
 });
 
 test("a --head that isn't a branch can't name the review, so the viewer asks for one", () => {
-  const view = spawnSync(process.execPath, [join(cwd, "src/view.ts"), "graph.json", "--base", "HEAD", "--head", "HEAD"], { encoding: "utf8" });
+  const view = spawnSync(process.execPath, [join(process.cwd(), "src/view.ts"), "graph.json", "--base", "HEAD", "--head", "HEAD"], { cwd: repo.dir, encoding: "utf8" });
   expect(view.status).toBe(2);
   expect(view.stderr).toContain("HEAD isn't a branch: name the review with --review <name>");
 });
