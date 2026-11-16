@@ -40,6 +40,9 @@ type Chat = {
   /** Where an anchor is, in a few words: the node, and a location's file and lines. */
   describe: (anchor: string) => string;
   placed: { current: Placed[] };
+  /** The Askable each placed thread's quote is in, by thread id, where the thread opens. */
+  homes: ReadonlyMap<string, HTMLElement>;
+  setHomes: (homes: ReadonlyMap<string, HTMLElement>) => void;
   open: ReadonlySet<string>;
   live: ReadonlyMap<string, Live>;
   summarizing: ReadonlySet<string>;
@@ -74,6 +77,7 @@ export function ChatProvider({ children, selectNode, describe }: { children: Rea
   const [summarizing, setSummarizing] = useState<ReadonlySet<string>>(new Set());
   const [menuAt, setMenuAt] = useState<{ x: number; y: number; threadId: string }>();
   const placed = useRef<Placed[]>([]);
+  const [homes, setHomes] = useState<ReadonlyMap<string, HTMLElement>>(new Map());
   useEffect(() => {
     fetch("/threads").then((r) => (r.ok ? r.json() : [])).then(setThreads, () => {});
   }, []);
@@ -100,6 +104,8 @@ export function ChatProvider({ children, selectNode, describe }: { children: Rea
     summarizing,
     toggle,
     placed,
+    homes,
+    setHomes,
     describe,
     markSent: (ids) => {
       const now = Date.now();
@@ -429,10 +435,23 @@ const squash = (s: string) => s.replace(/\s+/g, " ").trim();
 
 /** Text that can be asked about: anchor names where it is, context says what it is (told to Claude), parentId is set for an answer in a thread. */
 export function Askable({ anchor, context, parentId, children, style }: { anchor: string; context: string; parentId?: string; children: ReactNode; style?: CSSProperties }) {
+  const { threads, open, homes } = useChat();
+  const [el, setEl] = useState<HTMLDivElement | null>(null);
+  // the open threads whose quote is in this text open right under it
+  const here = el ? threads.filter((t) => open.has(t.id) && homes.get(t.id) === el) : [];
   return (
-    <div data-anchor={anchor} data-context={context} data-parent={parentId} style={style}>
-      {children}
-    </div>
+    <>
+      <div ref={setEl} data-anchor={anchor} data-context={context} data-parent={parentId} style={style}>
+        {children}
+      </div>
+      {here.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, margin: "8px 0" }}>
+          {here.map((t) => (
+            <ThreadView key={t.id} thread={t} />
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -507,13 +526,14 @@ function AskButton() {
  * changes: an answer streaming in, code widening, a panel opening.
  */
 function Underlines() {
-  const { threads, open, toggle, placed } = useChat();
+  const { threads, open, toggle, placed, homes, setHomes } = useChat();
   const staged = new Set(threads.filter((t) => t.stagedAt !== null).map((t) => t.id));
   useEffect(() => {
     if (!("highlights" in CSS)) return;
     let timer: number | undefined;
     const place = () => {
       const all: { id: string; range: Range }[] = [];
+      const found = new Map<string, HTMLElement>();
       for (const t of threads) {
         const quote = squash(t.quote);
         if (!quote) continue;
@@ -530,10 +550,12 @@ function Underlines() {
           range.setStart(startNode, startOffset);
           range.setEnd(endNode, endOffset + 1);
           all.push({ id: t.id, range });
+          found.set(t.id, el);
           break;
         }
       }
       placed.current = all;
+      if (found.size !== homes.size || [...found].some(([id, el]) => homes.get(id) !== el)) setHomes(found);
       CSS.highlights.set("thread-quote", new Highlight(...all.filter((p) => !open.has(p.id) && !staged.has(p.id)).map((p) => p.range)));
       CSS.highlights.set("thread-quote-open", new Highlight(...all.filter((p) => open.has(p.id) && !staged.has(p.id)).map((p) => p.range)));
       CSS.highlights.set("thread-quote-staged", new Highlight(...all.filter((p) => staged.has(p.id)).map((p) => p.range)));
@@ -545,7 +567,7 @@ function Underlines() {
     });
     observer.observe(document.body, { subtree: true, childList: true, characterData: true });
     return () => (observer.disconnect(), clearTimeout(timer));
-  }, [threads, open, [...staged].join()]);
+  }, [threads, open, [...staged].join(), homes]);
 
   // the thread whose underline is under the pointer, if any
   const hit = (e: MouseEvent) => {
@@ -589,10 +611,11 @@ function Underlines() {
   );
 }
 
-/** The open threads started at an anchor, each with the threads nested under its answers. */
+/** The open threads started at an anchor whose quote isn't on the page, each with the threads nested under its answers. */
 export function Threads({ anchor }: { anchor: string }) {
-  const { threads, open } = useChat();
-  const here = threads.filter((t) => t.anchor === anchor && open.has(t.id));
+  const { threads, open, homes } = useChat();
+  // a thread whose quote is on the page opens under it (Askable); here are the rest, such as one whose text changed
+  const here = threads.filter((t) => t.anchor === anchor && open.has(t.id) && !homes.has(t.id));
   if (!here.length) return null;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
