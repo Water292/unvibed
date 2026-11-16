@@ -5,6 +5,7 @@ import { useState, type PointerEvent } from "react";
 import type { Graph, Node } from "../../shared/graph.ts";
 import { groupLocations, LocationGroup } from "./code-view.tsx";
 import { useHost } from "./host.tsx";
+import { Selectable } from "./threads.tsx";
 import { riskiest, RiskLine, where } from "./risk.tsx";
 import type { RenderedLocation } from "./rendered-location.ts";
 import { ViewType } from "./view-type.ts";
@@ -32,7 +33,7 @@ type Props = {
 };
 
 export function Panel({ graph, node, locations, onMark, onSelect, width, onWidth, viewType, onViewType }: Props) {
-  const { Askable, Threads } = useHost();
+  const { Threads } = useHost();
   // The last mark that couldn't be saved: which location, and why.
   const [failure, setFailure] = useState<{ index: number; message: string }>();
   const markAndReport = async (index: number, hash: string, reviewed: boolean) => {
@@ -93,9 +94,9 @@ export function Panel({ graph, node, locations, onMark, onSelect, width, onWidth
           </div>
         </div>
         <h2 style={{ fontSize: 16, margin: "4px 0 8px" }}>{node.title}</h2>
-        <Askable anchor={`node:${node.id}`} context={`The explanation of graph node ${node.id} ("${node.title}"): ${node.text}`}>
+        <Selectable anchor={`node:${node.id}`} context={`The explanation of graph node ${node.id} ("${node.title}"): ${node.text}`} at={{ node: node.id }}>
           <p style={{ fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{node.text}</p>
-        </Askable>
+        </Selectable>
         {(() => {
           const top = riskiest(node.code);
           return (

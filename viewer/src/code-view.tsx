@@ -11,6 +11,7 @@ import "./code-view.css";
 import type { CodeCut } from "../../shared/graph-and-code.ts";
 import type { Location } from "../../shared/graph.ts";
 import { useHost } from "./host.tsx";
+import { Selectable } from "./threads.tsx";
 import { ReviewState, tint, type RenderedLocation } from "./rendered-location.ts";
 import { RiskLine, where as placeOf } from "./risk.tsx";
 import { ViewType } from "./view-type.ts";
@@ -187,7 +188,7 @@ type SegmentProps = Omit<Props, "group"> & {
 /** One box: one location's lines, or several that ran together, fetched as one cut. */
 function Segment({ nodeId, segment, above, below, onMore, viewType, onReviewed, failure }: SegmentProps) {
   const dark = useDarkMode();
-  const { routes, Askable, Threads } = useHost();
+  const { routes, Threads } = useHost();
   const first = segment[0]!.location;
   const { path, side } = first;
   const start = startOf(first);
@@ -239,9 +240,10 @@ function Segment({ nodeId, segment, above, below, onMore, viewType, onReviewed, 
         <div key={item.index} style={{ marginTop: i ? 10 : 0 }}>
           {header(item)}
           {cut && !anyChanged && (
-            <Askable
+            <Selectable
               anchor={`loc:${nodeId}#${item.index}`}
               context={`Code in ${path}:${startOf(item.location)}-${item.location.line} (${sideName} side), in graph node ${nodeId}`}
+              code={{ path, shows: (side, line) => showsLine(pieces[i] ?? "", side, line) }}
               style={{ all: "unset", display: "block" }}
             >
               <div className="code-view">
@@ -264,7 +266,7 @@ function Segment({ nodeId, segment, above, below, onMore, viewType, onReviewed, 
                   </>
                 )}
               </div>
-            </Askable>
+            </Selectable>
           )}
           <Threads anchor={`loc:${nodeId}#${item.index}`} />
         </div>
@@ -286,7 +288,6 @@ type HeaderProps = {
 
 /** A location's place, its reviewed box, what its lines do, and the AI reviewer's risk for them. */
 function LocationHeader({ nodeId, item: { rendered, location: l, index }, fetched, changedSinceGraph, onReviewed, failure }: HeaderProps) {
-  const { Askable } = useHost();
   const start = startOf(l);
   return (
     <div data-testid="location" style={{ marginBottom: 4 }}>
@@ -306,9 +307,13 @@ function LocationHeader({ nodeId, item: { rendered, location: l, index }, fetche
       )}
       {failure && <div style={{ fontSize: 11, color: "#dc2626", marginBottom: 4 }}>Couldn't save: {failure}</div>}
       {l.text && (
-        <Askable anchor={`loc:${nodeId}#${index}`} context={`The explanation of ${l.path}:${start}-${l.line} (${l.side === "LEFT" ? "base" : "head"} side), in graph node ${nodeId}: ${l.text}`}>
+        <Selectable
+          anchor={`loc:${nodeId}#${index}`}
+          context={`The explanation of ${l.path}:${start}-${l.line} (${l.side === "LEFT" ? "base" : "head"} side), in graph node ${nodeId}: ${l.text}`}
+          at={{ node: nodeId, location: l.id }}
+        >
           <div className="location-text">{l.text}</div>
-        </Askable>
+        </Selectable>
       )}
       <RiskLine
         risk={l.risk}

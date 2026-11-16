@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { MarkRequest } from "../../shared/graph-and-code.ts";
 import type { Graph } from "../../shared/graph.ts";
 import { HostProvider, NO_HOST, type Host } from "./host.tsx";
+import { ThreadsProvider, type Threads } from "./threads.tsx";
 import { clampPanelWidth, initialPanelWidth, Panel } from "./panel.tsx";
 import { Flow } from "./react-flow/flow.tsx";
 import { renderLocations } from "./rendered-location.ts";
@@ -60,6 +61,8 @@ type Props = {
   graph: Graph;
   /** Where the routes are, and how text is asked about; unset parts are the page's own routes, and no asking. */
   host?: Partial<Host>;
+  /** The threads on the graph, drawn in place of the host's Askable and Threads; unset for none. */
+  threads?: Threads;
   /** The selected node's id, whose panel is open; undefined for none. */
   selected: string | undefined;
   onSelect: (id: string | undefined) => void;
@@ -69,7 +72,7 @@ type Props = {
 
 const NONE_STAGED: ReadonlyMap<string, number> = new Map();
 
-export function GraphReview({ graph, host, selected, onSelect, staged = NONE_STAGED }: Props) {
+export function GraphReview({ graph, host, threads, selected, onSelect, staged = NONE_STAGED }: Props) {
   const given = { ...NO_HOST, ...host };
   const routes = given.routes;
   // The hashes marked reviewed: those marked when the page loaded, with each tick since added and each untick removed.
@@ -127,6 +130,7 @@ export function GraphReview({ graph, host, selected, onSelect, staged = NONE_STA
   const width = clampPanelWidth(Math.round(share * windowWidth), windowWidth);
   return (
     <HostProvider value={given}>
+      <ThreadsProvider value={threads}>
       <div style={{ position: "relative", height: "100%" }}>
         <Flow graph={graph} locations={locations} selected={selected} onSelect={onSelect} covered={node ? width : 0} staged={staged} />
         {node && (
@@ -144,6 +148,7 @@ export function GraphReview({ graph, host, selected, onSelect, staged = NONE_STA
           />
         )}
       </div>
+      </ThreadsProvider>
     </HostProvider>
   );
 }
