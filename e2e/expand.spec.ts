@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import type { Graph } from "../shared/graph.ts";
 import { tempRepo } from "../test/temp-repo.ts";
-import { hashLines } from "../src/hunks.ts";
+import { hashRows } from "../src/hunks.ts";
 import { startViewer } from "./start-viewer.ts";
 
 // long.txt: 40 lines; the head changes line 5 and, far below, line 30.
@@ -15,7 +15,7 @@ const HEAD = BASE.replace("line 5\n", "LINE FIVE\n").replace("line 30\n", "LINE 
 const FIVE_UUID = randomUUID();
 const graph: Graph = {
   schema: "test",
-  nodes: [{ id: FIVE_UUID, title: "line five", text: "", code: [{ id: randomUUID(), path: "long.txt", side: "RIGHT", line: 5, hash: hashLines(["-line 5", "+LINE FIVE"]), added: 1, removed: 1, text: "" }] }],
+  nodes: [{ id: FIVE_UUID, title: "line five", text: "", code: [{ id: randomUUID(), path: "long.txt", side: "RIGHT", line: 5, hash: hashRows(["-line 5", "+LINE FIVE"]), added: 1, removed: 1, text: "" }] }],
   edges: [],
 };
 

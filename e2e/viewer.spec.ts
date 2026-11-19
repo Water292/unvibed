@@ -1,10 +1,10 @@
 // The viewer as a user meets it: `node src/view.ts graph.json` on a real repo, in a real browser.
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
-import { clearReview, createTables } from "../src/review.ts";
+import { ReviewStore } from "../src/review.ts";
 import type { Graph } from "../shared/graph.ts";
 import { tempRepo } from "../test/temp-repo.ts";
-import { hashLines } from "../src/hunks.ts";
+import { hashRows } from "../src/hunks.ts";
 import { startViewer } from "./start-viewer.ts";
 
 // app.ts at the base and at the head: the head replaces greet's line; add and version don't change.
@@ -16,9 +16,9 @@ const [GREET_UUID, ADD_UUID, VERSION_UUID] = [randomUUID(), randomUUID(), random
 const graph: Graph = {
   schema: "test",
   nodes: [
-    { id: GREET_UUID, title: "greet says hi", text: "The greeting is shorter now.", code: [{ id: randomUUID(), path: "app.ts", side: "RIGHT", line: 2, hash: hashLines(['-  return "hello " + name;', '+  return "hi " + name;']), added: 1, removed: 1, text: "" }] },
-    { id: ADD_UUID, title: "add sums two numbers", text: "Unchanged, shown for context.", code: [{ id: randomUUID(), path: "app.ts", side: "RIGHT", start_line: 5, line: 7, hash: hashLines([" export function add(a: number, b: number) {", "   return a + b;", " }"]), added: 0, removed: 0, text: "" }] },
-    { id: VERSION_UUID, title: "the version", text: "Still 1.", code: [{ id: randomUUID(), path: "app.ts", side: "RIGHT", line: 9, hash: hashLines([" export const version = 1;"]), added: 0, removed: 0, text: "" }] },
+    { id: GREET_UUID, title: "greet says hi", text: "The greeting is shorter now.", code: [{ id: randomUUID(), path: "app.ts", side: "RIGHT", line: 2, hash: hashRows(['-  return "hello " + name;', '+  return "hi " + name;']), added: 1, removed: 1, text: "" }] },
+    { id: ADD_UUID, title: "add sums two numbers", text: "Unchanged, shown for context.", code: [{ id: randomUUID(), path: "app.ts", side: "RIGHT", start_line: 5, line: 7, hash: hashRows([" export function add(a: number, b: number) {", "   return a + b;", " }"]), added: 0, removed: 0, text: "" }] },
+    { id: VERSION_UUID, title: "the version", text: "Still 1.", code: [{ id: randomUUID(), path: "app.ts", side: "RIGHT", line: 9, hash: hashRows([" export const version = 1;"]), added: 0, removed: 0, text: "" }] },
   ],
   edges: [
     { id: randomUUID(), from: GREET_UUID, to: ADD_UUID },
@@ -29,6 +29,8 @@ const graph: Graph = {
 // A repo with the base committed and the PR's change left uncommitted, its graph, and the viewer serving them.
 let repo: ReturnType<typeof tempRepo>;
 let viewer: Awaited<ReturnType<typeof startViewer>>;
+// this repo's marks database, which the viewer shares
+let reviews: ReviewStore;
 test.beforeAll(async ({}, { parallelIndex }) => {
   repo = tempRepo();
   repo.write("app.ts", BASE);
@@ -36,8 +38,7 @@ test.beforeAll(async ({}, { parallelIndex }) => {
   repo.git("commit", "-qm", "base");
   repo.write("app.ts", HEAD);
   repo.write("graph.json", JSON.stringify(graph));
-  process.chdir(repo.dir); // so createTables opens this repo's database, which the viewer shares
-  createTables();
+  reviews = new ReviewStore(repo.dir);
   // Each Playwright worker running at the same time has its own parallelIndex, so its own port.
   viewer = await startViewer(repo.dir, 4700 + parallelIndex, ["--base", "HEAD"]);
 });
@@ -176,7 +177,7 @@ test.describe("marking code reviewed", () => {
   // Put everything back for the tests that follow.
   test.afterEach(() => {
     repo.write("app.ts", HEAD);
-    clearReview("e2e");
+    reviews.clearReview("e2e");
   });
 
   const getReviewedCheckbox = (page: Page) => panel(page).getByRole("checkbox", { name: "reviewed" });
@@ -208,7 +209,7 @@ test.describe("marking code reviewed", () => {
     const [yellow, green] = ["rgba(234, 179, 8, 0.25)", "rgba(34, 197, 94, 0.22)"];
     const nodeBackground = (id: string) => box(page, id).evaluate((el) => getComputedStyle(el).backgroundImage);
     // the location's box: the code and the line above it with its path and reviewed box
-    const locationBox = () => panel(page).locator(".code-view").locator("..");
+    const locationBox = () => panel(page).getByTestId("segment");
 
     await openBox(page, GREET_UUID, greetLineInPr);
     // greet's one location removes a line and adds one: its bar is half red, half green

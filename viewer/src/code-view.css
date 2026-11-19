@@ -1,6 +1,7 @@
 /* The renderer's box, fitted to the panel. */
 .code-view {
   overflow: hidden;
+  background: Canvas;
   border: 1px solid rgba(128, 128, 128, 0.3);
   border-radius: 6px;
 }
@@ -19,4 +20,15 @@
 }
 .code-view-more:hover {
   background: rgba(128, 128, 128, 0.25);
+}
+/* What a location's lines do: a card above them, as a reviewer's note sits over a hunk. */
+.location-text {
+  font-family: system-ui;
+  font-size: 12.5px;
+  line-height: 1.45;
+  padding: 6px 10px;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 6px;
+  background: Canvas;
+  color: CanvasText;
 }

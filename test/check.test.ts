@@ -1,8 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { expect, test } from "vitest";
-import { check, checkIds, type ReadFile } from "../src/check.ts";
-import { hashLines } from "../src/hunks.ts";
+import { check, checkEdgeEnds, checkGraph, checkIds, type ReadFile } from "../src/check.ts";
+import { hashLines, hashRows } from "../src/hunks.ts";
 import type { Graph } from "../shared/graph.ts";
 
 // One node explaining lines 2\u20133 of a file: "two" replaced "zwei", "three" didn't change.
@@ -13,12 +13,14 @@ const graph: Graph = {
       id: randomUUID(),
       title: "t",
       text: "",
-      code: [{ id: randomUUID(), path: "example.ts", side: "RIGHT", start_line: 2, line: 3, hash: hashLines(["-zwei", "+two", " three"]), added: 1, removed: 1, text: "" }],
+      code: [{ id: randomUUID(), path: "example.ts", side: "RIGHT", start_line: 2, line: 3, hash: hashRows(["-zwei", "+two", " three"]), added: 1, removed: 1, text: "" }],
     },
   ],
   edges: [],
 };
 
+// check stores the texts it diffs as blobs in a repo: this one, where the tests run
+const REPO = process.cwd();
 const sides = (base: string, head: string): ReadFile => (side) => (side === "LEFT" ? base : head);
 const BASE = "one\nzwei\nthree\nfour\n";
 const HEAD = "one\ntwo\nthree\nfour\n";
@@ -29,37 +31,47 @@ test("the hash is git's blob hash of the lines", () => {
   expect(hashLines(lines)).toBe(git);
 });
 
+test("a location's hash ignores whitespace in its rows, but not which rows were added or removed", () => {
+  expect(hashRows(["-zwei", "+  two", " three"])).toBe(hashRows(["-zwei", "+two", " three"]));
+  expect(hashRows(["-zwei", "+two", " three"])).not.toBe(hashRows(["-zwei", "+tw0", " three"]));
+  expect(hashRows([" two"])).not.toBe(hashRows(["+two"]));
+});
+
+test("re-indented code still passes", () => {
+  expect(check(REPO, graph, sides(BASE, "one\n    two\nthree\nfour\n"))).toEqual([]);
+});
+
 test("untouched code passes", () => {
-  expect(check(graph, sides(BASE, HEAD))).toEqual([]);
+  expect(check(REPO, graph, sides(BASE, HEAD))).toEqual([]);
 });
 
 test("editing a line the node explains fails, showing the rows now", () => {
-  expect(check(graph, sides(BASE, "one\nTWO\nthree\nfour\n"))).toMatchObject([
-    { reason: "hash-mismatch", actual: ["-zwei", "+TWO", " three"], expected: { hash: hashLines(["-zwei", "+TWO", " three"]), added: 1, removed: 1 } },
+  expect(check(REPO, graph, sides(BASE, "one\nTWO\nthree\nfour\n"))).toMatchObject([
+    { reason: "hash-mismatch", actual: ["-zwei", "+TWO", " three"], expected: { hash: hashRows(["-zwei", "+TWO", " three"]), added: 1, removed: 1 } },
   ]);
 });
 
 test("code shifting under the node fails", () => {
-  expect(check(graph, sides(BASE, `zero\n${HEAD}`))).toMatchObject([{ reason: "hash-mismatch" }]);
+  expect(check(REPO, graph, sides(BASE, `zero\n${HEAD}`))).toMatchObject([{ reason: "hash-mismatch" }]);
 });
 
 test("the same head lines replacing something else fail: a base change changes the change", () => {
-  expect(check(graph, sides("one\ndeux\nthree\nfour\n", HEAD))).toMatchObject([{ reason: "hash-mismatch", actual: ["-deux", "+two", " three"] }]);
+  expect(check(REPO, graph, sides("one\ndeux\nthree\nfour\n", HEAD))).toMatchObject([{ reason: "hash-mismatch", actual: ["-deux", "+two", " three"] }]);
 });
 
 test("editing code the node doesn't explain passes", () => {
-  expect(check(graph, sides(BASE, "one\ntwo\nthree\nFOUR\nfive\n"))).toEqual([]);
+  expect(check(REPO, graph, sides(BASE, "one\ntwo\nthree\nFOUR\nfive\n"))).toEqual([]);
 });
 
 test("counts that don't match the rows fail, even with the right hash", () => {
   const location = { ...graph.nodes[0]!.code[0]!, added: 5 };
   const wrong = { ...graph, nodes: [{ ...graph.nodes[0]!, code: [location] }] };
-  expect(check(wrong, sides(BASE, HEAD))).toMatchObject([{ reason: "count-mismatch" }]);
+  expect(check(REPO, wrong, sides(BASE, HEAD))).toMatchObject([{ reason: "count-mismatch" }]);
 });
 
 test("a location past the end of its file, or in a file that isn't there, fails", () => {
-  expect(check(graph, sides(BASE, "one\n"))).toMatchObject([{ reason: "out-of-range" }]);
-  expect(check(graph, () => undefined)).toMatchObject([{ reason: "missing-file" }]);
+  expect(check(REPO, graph, sides(BASE, "one\n"))).toMatchObject([{ reason: "out-of-range" }]);
+  expect(check(REPO, graph, () => undefined)).toMatchObject([{ reason: "missing-file" }]);
 });
 
 test("every node, edge and location has a UUID of its own", () => {
@@ -79,4 +91,30 @@ test("every node, edge and location has a UUID of its own", () => {
     { kind: "edge", reason: "duplicate" },
     { kind: "location", id: undefined, reason: "not-a-uuid" },
   ]);
+});
+
+test("every edge joins two of the graph's nodes", () => {
+  const node = graph.nodes[0]!;
+  const ok: Graph = { ...graph, edges: [{ id: randomUUID(), from: node.id, to: node.id }] };
+  expect(checkEdgeEnds(ok)).toEqual([]);
+
+  const [gone, alsoGone, edge] = [randomUUID(), randomUUID(), randomUUID()];
+  const leftOver: Graph = { ...graph, edges: [{ id: edge, from: node.id, to: gone }, { id: randomUUID(), from: alsoGone, to: gone }] };
+  expect(checkEdgeEnds(leftOver)).toEqual([
+    { id: edge, end: "to", nodeId: gone },
+    { id: leftOver.edges[1]!.id, end: "from", nodeId: alsoGone },
+    { id: leftOver.edges[1]!.id, end: "to", nodeId: gone },
+  ]);
+});
+
+test("lists the changed lines no location shows, as runs of removed and added lines", () => {
+  // the graph shows lines 2-3; the head also changes line 4 and adds a line 6, and changes a file no location names
+  const head = "one\ntwo\nthree\nFOUR\nfive\nsix\n";
+  const read: ReadFile = (side, path) => (path === "example.ts" ? (side === "LEFT" ? `${BASE}five\n` : head) : side === "LEFT" ? "a\n" : "b\n");
+  expect(checkGraph(REPO, graph, read, ["example.ts", "other.ts"]).notShown).toEqual([
+    { path: "example.ts", removed: { start: 4, end: 4 }, added: { start: 4, end: 4 } },
+    { path: "example.ts", added: { start: 6, end: 6 } },
+    { path: "other.ts", removed: { start: 1, end: 1 }, added: { start: 1, end: 1 } },
+  ]);
+  expect(checkGraph(REPO, graph, sides(BASE, HEAD), ["example.ts"]).notShown).toEqual([]);
 });

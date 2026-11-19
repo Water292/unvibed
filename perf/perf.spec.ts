@@ -43,11 +43,10 @@ test.beforeAll(async ({}, { parallelIndex }) => {
   repo.git("add", ".");
   repo.git("commit", "-qm", "base");
   for (let f = 0; f < FILES; f++) repo.write(`f${f}.ts`, head(f));
-  process.chdir(repo.dir); // so getChanges stores its blobs in this repo
 
   // Node n's location is the next change in its file, with the line above and below it, so every location is a
   // different change. Links make a binary tree: n links to 2n+1 and 2n+2.
-  const changes = Array.from({ length: FILES }, (_, f) => getChanges(base(f), head(f)));
+  const changes = Array.from({ length: FILES }, (_, f) => getChanges(repo.dir, base(f), head(f)));
   const nodes = Array.from({ length: NODES }, (_, n) => {
     const file = n % FILES;
     const start = Math.floor(n / FILES) * 10 + 4;

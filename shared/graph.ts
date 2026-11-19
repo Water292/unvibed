@@ -17,6 +17,8 @@ export type Node = {
   code: Location[];
 };
 
+export type Risk = { level: "low" | "medium" | "high"; reason?: string };
+
 /** `to` helps explain `from`. */
 export type Edge = {
   /** A UUID, unique within the graph. */
@@ -41,7 +43,8 @@ export type Location = {
   line: number;
   /**
    * git blob hash of the location's own rows of the diff, joined with "\n", no final newline: lines start_line..line
-   * and the removed or added lines among them, each marked +, - or space. Review marks are made by this hash.
+   * and the removed or added lines among them, each marked +, - or space, with the whitespace taken out of each row's
+   * text, so re-indenting keeps it. Review marks are made by this hash.
    */
   hash: string;
   /** How many of those rows are added lines. */
@@ -50,4 +53,9 @@ export type Location = {
   removed: number;
   /** What these lines do, shown above them. */
   text: string;
+  /**
+   * How risky these lines are, as an AI reviewer judged them, with why. How that reviewer is asked is up to whoever
+   * runs it; unset when no reviewer has looked. A node's risk is its riskiest location's.
+   */
+  risk?: Risk;
 };
